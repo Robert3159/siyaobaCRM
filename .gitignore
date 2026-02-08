@@ -1,0 +1,61 @@
+# ==================== 前端通用忽略（soybeanadmin）====================
+# Node.js依赖包（前端核心，体积大，无需同步）
+node_modules/
+# 环境变量文件（包含敏感信息，如接口地址、密钥）
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+# 构建产物（打包后的文件，无需同步，本地可重新构建）
+dist/
+build/
+# 日志文件
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+# IDE/编辑器配置（不同电脑的IDE配置不同，无需同步）
+.idea/
+.vscode/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# 缓存文件
+.DS_Store
+*.cache
+# ==================== 后端通用忽略（适配Java/Node.js/Python等）====================
+# Java后端
+target/
+*.jar
+*.war
+*.class
+# Maven/Gradle缓存
+.mvn/
+gradle/
+gradlew
+gradlew.bat
+# Node.js后端（如果后端是Node.js）
+backend/node_modules/
+backend/dist/
+# Python后端（如果后端是Python）
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+# 后端日志
+logs/
+*.log
+# 后端环境配置
+backend/.env
+backend/application-dev.yml
+backend/application-prod.yml
+# ==================== 通用忽略 ====================
+# 系统临时文件
+tmp/
+temp/
+# 压缩包
+*.zip
+*.rar
+*.7z
