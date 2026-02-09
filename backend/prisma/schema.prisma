@@ -1,0 +1,26 @@
+generator client {
+  provider = "prisma-client-py"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              Int       @id @default(autoincrement())
+  email           String    @unique
+  hashed_password String
+  role            String
+  department_id   Int?
+  team_id         Int?
+  is_admin        Boolean   @default(false)
+
+  // 软删除字段（规则书第 13 章）
+  is_deleted Boolean   @default(false)
+  deleted_at DateTime?
+
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+}
+
