@@ -2,7 +2,7 @@ import { computed, reactive, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { defineStore } from 'pinia';
 import { useLoading } from '@sa/hooks';
-import { fetchGetUserInfo, fetchLogin } from '@/service/api';
+import { fetchGetUserInfo, fetchLogin, fetchMyProfile } from '@/service/api';
 import { useRouterPush } from '@/hooks/common/router';
 import { localStg } from '@/utils/storage';
 import { SetupStoreId } from '@/enum';
@@ -25,7 +25,9 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     userId: '',
     userName: '',
     roles: [],
-    buttons: []
+    buttons: [],
+    homeRoute: null,
+    availableHomeRoutes: []
   });
 
   /** is super role in static route */
@@ -90,30 +92,24 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
   }
 
   /**
-   * Login
-   *
-   * @param userName User name
-   * @param password Password
-   * @param [redirect=true] Whether to redirect after login. Default is `true`
-   */
-  async function login(userName: string, password: string, redirect = true) {
+   * Login锛堢敤鎴峰悕 user + 瀵嗙爜 + Turnstile token锛?   *
+   * @param payload.user 鐢ㄦ埛鍚?   * @param payload.password 瀵嗙爜
+   * @param payload.turnstileToken Cloudflare Turnstile 浜烘満楠岃瘉 token
+   * @param [payload.redirect=true] 鐧诲綍鎴愬姛鍚庢槸鍚﹁烦杞?   */
+  async function login(payload: { user: string; password: string; turnstileToken: string; redirect?: boolean }) {
+    const { user, password, turnstileToken } = payload;
     startLoading();
 
-    const { data: loginToken, error } = await fetchLogin(userName, password);
+    const { data: loginToken, error } = await fetchLogin(user, password, turnstileToken);
 
-    if (!error) {
+    if (!error && loginToken) {
       const pass = await loginByToken(loginToken);
 
       if (pass) {
-        // Check if the tab needs to be cleared
-        const isClear = checkTabClear();
-        let needRedirect = redirect;
-
-        if (isClear) {
-          // If the tab needs to be cleared,it means we don't need to redirect.
-          needRedirect = false;
-        }
-        await redirectFromLogin(needRedirect);
+        // Keep the tab cleanup behavior when different users log in on this browser.
+        checkTabClear();
+        await routeStore.initAuthRoute();
+        await redirectFromLogin(false);
 
         window.$notification?.success({
           title: $t('page.login.common.loginSuccess'),
@@ -128,30 +124,83 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     endLoading();
   }
 
-  async function loginByToken(loginToken: Api.Auth.LoginToken) {
-    // 1. stored in the localStorage, the later requests need it in headers
-    localStg.set('token', loginToken.token);
-    localStg.set('refreshToken', loginToken.refreshToken);
+  /** 浠呭厑璁歌繘鍏ョ郴缁熺殑瑙掕壊锛屼笌鍚庣 _ENTRY_ROLES 涓€鑷达紱PENDING_MEMBER 涓哄緟瀹℃牳涓嶅彲杩涚郴缁? */
+  const ENTRY_ROLES = [
+    'ADMIN',
+    'SUB_ADMIN',
+    'QGS_DIRECTOR',
+    'QGS_LEADER',
+    'QGS_MEMBER',
+    'HGS_DIRECTOR',
+    'HGS_LEADER',
+    'HGS_MEMBER'
+  ];
 
-    // 2. get user info
-    const pass = await getUserInfo();
-
-    if (pass) {
-      token.value = loginToken.token;
-
-      return true;
+  async function syncDisplayNameFromProfile(fallbackName: string) {
+    const { data, error } = await fetchMyProfile();
+    if (error || !data) {
+      userInfo.userName = fallbackName;
+      return;
     }
 
-    return false;
+    const alias = (data.alias || '').trim();
+    const user = (data.user || '').trim();
+    userInfo.userName = alias || user || fallbackName;
+  }
+
+  async function loginByToken(loginToken: Api.Auth.LoginToken) {
+    const accessToken = loginToken.access_token ?? loginToken.token;
+    if (!accessToken) return false;
+    localStg.set('token', accessToken);
+    if (loginToken.refreshToken) localStg.set('refreshToken', loginToken.refreshToken);
+
+    // 浼樺厛浣跨敤鐧诲綍/娉ㄥ唽鍝嶅簲閲岀殑 user锛屽皯涓€娆?/auth/me 璇锋眰锛屽姞蹇烦杞?
+    if (loginToken.user) {
+      const u = loginToken.user;
+      userInfo.userId = String(u.id);
+      userInfo.userName = u.role;
+      userInfo.roles = [u.role];
+      userInfo.buttons = [];
+      userInfo.homeRoute = u.home_route || null;
+      userInfo.availableHomeRoutes = Array.isArray(u.available_home_routes) ? [...u.available_home_routes] : [];
+      await syncDisplayNameFromProfile(u.role);
+    } else {
+      const pass = await getUserInfo();
+      if (!pass) return false;
+    }
+
+    // 寰呭鏍告垨鏃犳寮忚鑹诧細涓嶅厑璁歌繘鍏ョ郴缁燂紝鎻愮ず鍚庢竻闄ょ櫥褰曟€?
+    const hasEntryRole = userInfo.roles.some((r: string) => ENTRY_ROLES.includes(r));
+    if (!hasEntryRole) {
+      const msg = $t('page.login.common.accountPending');
+      window.$message?.warning(msg);
+      resetStore();
+      return false;
+    }
+
+    token.value = accessToken;
+    return true;
   }
 
   async function getUserInfo() {
     const { data: info, error } = await fetchGetUserInfo();
 
-    if (!error) {
-      // update store
-      Object.assign(userInfo, info);
-
+    if (!error && info) {
+      userInfo.userId = String(info.id);
+      userInfo.userName = info.role;
+      userInfo.roles = [info.role];
+      userInfo.buttons = [];
+      userInfo.homeRoute = info.home_route || null;
+      userInfo.availableHomeRoutes = Array.isArray(info.available_home_routes) ? [...info.available_home_routes] : [];
+      await syncDisplayNameFromProfile(info.role);
+      // 鑻ュ悗绔繑鍥炲緟瀹℃牳瑙掕壊锛屼笉鍏佽杩涘叆绯荤粺锛堣矾鐢卞畧鍗篃浼氬湪 initUserInfo 鍚庡仛鍚屾牱鍒ゆ柇锛?
+      const hasEntryRole = userInfo.roles.some((r: string) => ENTRY_ROLES.includes(r));
+      if (!hasEntryRole) {
+        const msg = $t('page.login.common.accountPending');
+        window.$message?.warning(msg);
+        resetStore();
+        return false;
+      }
       return true;
     }
 
@@ -178,6 +227,7 @@ export const useAuthStore = defineStore(SetupStoreId.Auth, () => {
     loginLoading,
     resetStore,
     login,
+    loginByToken,
     initUserInfo
   };
 });

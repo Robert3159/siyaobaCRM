@@ -28,6 +28,8 @@ declare namespace Env {
     readonly VITE_ICON_LOCAL_PREFIX: 'icon-local';
     /** backend service base url */
     readonly VITE_SERVICE_BASE_URL: string;
+    /** WebSocket notification endpoint */
+    readonly VITE_WS_URL?: string;
     /**
      * success code of backend service
      *
@@ -110,6 +112,8 @@ declare namespace Env {
     readonly VITE_PROXY_LOG?: CommonType.YesOrNo;
     /** The launch editor */
     readonly VITE_DEVTOOLS_LAUNCH_EDITOR?: import('vite-plugin-vue-devtools').VitePluginVueDevToolsOptions['launchEditor'];
+    /** Cloudflare Turnstile 站点密钥（登录/注册人机验证），稍后配置 */
+    readonly VITE_TURNSTILE_SITE_KEY?: string;
   }
 }
 

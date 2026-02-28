@@ -2,6 +2,7 @@ import type { CustomRoute, ElegantConstRoute, ElegantRoute } from '@elegant-rout
 import { generatedRoutes } from '../elegant/routes';
 import { layouts, views } from '../elegant/imports';
 import { transformElegantRoutesToVueRoutes } from '../elegant/transform';
+import { applyRouteMetaOverrides, routeMetaOverrides } from '../route-meta-overrides';
 
 /**
  * custom routes
@@ -16,7 +17,10 @@ export function createStaticRoutes() {
 
   const authRoutes: ElegantRoute[] = [];
 
-  [...customRoutes, ...generatedRoutes].forEach(item => {
+  const allRoutes = [...customRoutes, ...generatedRoutes] as ElegantConstRoute[];
+  const routesWithOverrides = applyRouteMetaOverrides(allRoutes, routeMetaOverrides) as ElegantRoute[];
+
+  routesWithOverrides.forEach(item => {
     if (item.meta?.constant) {
       constantRoutes.push(item);
     } else {

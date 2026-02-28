@@ -1,6 +1,6 @@
 const local: App.I18n.Schema = {
   system: {
-    title: 'SoybeanAdmin',
+    title: 'Siyaoba CRM System',
     updateTitle: 'System Version Update Notification',
     updateContent: 'A new version of the system has been detected. Do you want to refresh the page immediately?',
     updateConfirm: 'Refresh immediately',
@@ -214,6 +214,19 @@ const local: App.I18n.Schema = {
       globalSearch: {
         title: 'Global Search Settings',
         visible: 'Display GlobalSearch button'
+      },
+      notification: {
+        title: 'Notifications',
+        visible: 'Show notification button',
+        placeholder: 'No notifications yet. WebSocket will be connected later.',
+        empty: 'No pending messages.',
+        connecting: 'Connecting...',
+        submitter: 'Submitter',
+        country: 'Country',
+        age: 'Age',
+        server: 'Server',
+        token: 'Token',
+        claim: 'Claim'
       }
     },
     configOperation: {
@@ -229,13 +242,38 @@ const local: App.I18n.Schema = {
     404: 'Page Not Found',
     500: 'Server Error',
     'iframe-page': 'Iframe',
-    home: 'Home'
+    home: 'Home_Deprecated',
+    dashboard: 'Home',
+    dashboard_overall: 'Overview',
+    dashboard_qgs: 'QGS Board',
+    dashboard_hgs: 'HGS Board',
+    qgs: 'QGS Workspace',
+    qgs_submit: 'Submit Register',
+    qgs_list: 'Player List',
+    qgs_statistics: 'Register Stats',
+    hgs: 'HGS Workspace',
+    hgs_list: 'Leader List',
+    hgs_order: 'Order List',
+    hgs_statistics: 'Statistics',
+    business: 'Business',
+    'business_player-list': 'Player Master List',
+    business_project: 'Project',
+    business_schema: 'Schema',
+    system: 'System',
+    system_user: 'User',
+    system_role: 'Role',
+    system_menu: 'Menu',
+    system_log: 'Log',
+    system_profile: 'Profile',
+    system_about: 'About',
+    'player-list': 'Player List'
   },
   page: {
     login: {
       common: {
         loginOrRegister: 'Login / Register',
         userNamePlaceholder: 'Please enter user name',
+        emailPlaceholder: 'Please enter email',
         phonePlaceholder: 'Please enter phone number',
         codePlaceholder: 'Please enter verification code',
         passwordPlaceholder: 'Please enter password',
@@ -245,7 +283,8 @@ const local: App.I18n.Schema = {
         back: 'Back',
         validateSuccess: 'Verification passed',
         loginSuccess: 'Login successfully',
-        welcomeBack: 'Welcome back, {userName} !'
+        welcomeBack: 'Welcome back, {userName} !',
+        accountPending: 'Your account has been registered. Please contact the administrator to activate.'
       },
       pwdLogin: {
         title: 'Password Login',
@@ -270,6 +309,9 @@ const local: App.I18n.Schema = {
         agreement: 'I have read and agree to',
         protocol: '《User Agreement》',
         policy: '《Privacy Policy》'
+      },
+      turnstile: {
+        required: 'Please complete the human verification'
       },
       resetPwd: {
         title: 'Reset Password'
@@ -320,7 +362,7 @@ const local: App.I18n.Schema = {
     },
     pwd: {
       required: 'Please enter password',
-      invalid: '6-18 characters, including letters, numbers, and underscores'
+      invalid: 'Password must be 6-32 characters (letters, numbers, special symbols allowed)'
     },
     confirmPwd: {
       required: 'Please enter password again',
@@ -333,6 +375,9 @@ const local: App.I18n.Schema = {
     email: {
       required: 'Please enter email',
       invalid: 'Email format is incorrect'
+    },
+    alias: {
+      placeholder: 'Alias (optional)'
     }
   },
   dropdown: {

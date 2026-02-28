@@ -35,6 +35,7 @@ export function useFormRules() {
 
   const formRules = {
     userName: [createRequiredRule($t('form.userName.required')), patternRules.userName],
+    alias: [] as App.Global.FormRule[], // 花名可选，无必填校验
     phone: [createRequiredRule($t('form.phone.required')), patternRules.phone],
     pwd: [createRequiredRule($t('form.pwd.required')), patternRules.pwd],
     code: [createRequiredRule($t('form.code.required')), patternRules.code],

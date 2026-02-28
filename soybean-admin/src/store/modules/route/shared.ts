@@ -14,6 +14,20 @@ export function filterAuthRoutesByRoles(routes: ElegantConstRoute[], roles: stri
 }
 
 /**
+ * Filter auth routes by allowed route names.
+ *
+ * Keep parent routes when any child route is allowed.
+ *
+ * @param routes Auth routes
+ * @param routeNames Allowed route names
+ */
+export function filterAuthRoutesByRouteNames(routes: ElegantConstRoute[], routeNames: string[]) {
+  const allowedRouteNameSet = new Set(routeNames.filter(Boolean));
+
+  return routes.flatMap(route => filterAuthRouteByRouteNames(route, allowedRouteNameSet));
+}
+
+/**
  * Filter auth route by roles
  *
  * @param route Auth route
@@ -40,6 +54,25 @@ function filterAuthRouteByRoles(route: ElegantConstRoute, roles: string[]): Eleg
   }
 
   return hasPermission || isEmptyRoles ? [filterRoute] : [];
+}
+
+/**
+ * Filter auth route by allowed route names.
+ *
+ * @param route Auth route
+ * @param allowedRouteNameSet Allowed route name set
+ */
+function filterAuthRouteByRouteNames(route: ElegantConstRoute, allowedRouteNameSet: Set<string>): ElegantConstRoute[] {
+  const filterRoute: ElegantConstRoute = { ...route };
+
+  if (filterRoute.children?.length) {
+    filterRoute.children = filterRoute.children.flatMap(item => filterAuthRouteByRouteNames(item, allowedRouteNameSet));
+  }
+
+  const hasChildren = Boolean(filterRoute.children?.length);
+  const isAllowed = allowedRouteNameSet.has(String(route.name));
+
+  return isAllowed || hasChildren ? [filterRoute] : [];
 }
 
 /**

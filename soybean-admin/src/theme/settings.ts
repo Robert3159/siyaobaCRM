@@ -3,8 +3,8 @@ export const themeSettings: App.Theme.ThemeSetting = {
   themeScheme: 'light',
   grayscale: false,
   colourWeakness: false,
-  recommendColor: false,
-  themeColor: '#646cff',
+  recommendColor: true,
+  themeColor: '#6366f1',
   themeRadius: 6,
   otherColor: {
     info: '#2080f0',
@@ -28,38 +28,41 @@ export const themeSettings: App.Theme.ThemeSetting = {
       showIcon: true
     },
     multilingual: {
-      visible: true
+      visible: false
     },
     globalSearch: {
+      visible: false
+    },
+    notification: {
       visible: true
     }
   },
   tab: {
-    visible: true,
+    visible: false,
     cache: true,
-    height: 44,
+    height: 30,
     mode: 'chrome',
     closeTabByMiddleClick: false
   },
   fixedHeaderAndTab: true,
   sider: {
-    inverted: false,
-    width: 220,
-    collapsedWidth: 64,
+    inverted: true,
+    width: 210,
+    collapsedWidth: 50,
     mixWidth: 90,
     mixCollapsedWidth: 64,
     mixChildMenuWidth: 200,
     autoSelectFirstMenu: false
   },
   footer: {
-    visible: true,
+    visible: false,
     fixed: false,
     height: 48,
     right: true
   },
   watermark: {
     visible: false,
-    text: 'SoybeanAdmin',
+    text: 'siyaobacrm',
     enableUserName: false,
     enableTime: false,
     timeFormat: 'YYYY-MM-DD HH:mm'

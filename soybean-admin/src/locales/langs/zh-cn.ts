@@ -1,6 +1,6 @@
 const local: App.I18n.Schema = {
   system: {
-    title: 'Soybean 管理系统',
+    title: '肆幺捌 CRM 系统',
     updateTitle: '系统版本更新通知',
     updateContent: '检测到系统有新版本发布，是否立即刷新页面？',
     updateConfirm: '立即刷新',
@@ -210,6 +210,19 @@ const local: App.I18n.Schema = {
       globalSearch: {
         title: '全局搜索设置',
         visible: '显示全局搜索按钮'
+      },
+      notification: {
+        title: '通知',
+        visible: '显示通知按钮',
+        placeholder: '暂无通知，后续对接 WebSocket',
+        empty: '暂无待认领消息',
+        connecting: '连接中...',
+        submitter: '提交人',
+        country: '国家',
+        age: '年龄',
+        server: '区服',
+        token: 'Token码',
+        claim: '认领'
       }
     },
     configOperation: {
@@ -225,13 +238,38 @@ const local: App.I18n.Schema = {
     404: '页面不存在',
     500: '服务器错误',
     'iframe-page': '外链页面',
-    home: '首页'
+    home: '首页_弃用',
+    dashboard: '首页',
+    dashboard_overall: '控制台',
+    dashboard_qgs: '前端看板',
+    dashboard_hgs: '后端看板',
+    qgs: '前端工作台',
+    qgs_submit: '提交注册',
+    qgs_list: '玩家列表',
+    qgs_statistics: '数据统计',
+    hgs: '后端工作台',
+    hgs_list: '玩家列表',
+    hgs_order: '订单列表',
+    hgs_statistics: '数据统计',
+    business: '业务中心',
+    'business_player-list': '玩家总表',
+    business_project: '项目管理',
+    business_schema: '表单管理',
+    system: '系统设置',
+    system_user: '用户管理',
+    system_role: '角色管理',
+    system_menu: '菜单管理',
+    system_log: '操作日志',
+    system_profile: '个人中心',
+    system_about: '网站信息',
+    'player-list': '玩家列表'
   },
   page: {
     login: {
       common: {
         loginOrRegister: '登录 / 注册',
         userNamePlaceholder: '请输入用户名',
+        emailPlaceholder: '请输入邮箱',
         phonePlaceholder: '请输入手机号',
         codePlaceholder: '请输入验证码',
         passwordPlaceholder: '请输入密码',
@@ -241,7 +279,8 @@ const local: App.I18n.Schema = {
         back: '返回',
         validateSuccess: '验证成功',
         loginSuccess: '登录成功',
-        welcomeBack: '欢迎回来，{userName} ！'
+        welcomeBack: '{userName} 欢迎回来！',
+        accountPending: '您的账号已注册成功，请联系管理员开通'
       },
       pwdLogin: {
         title: '密码登录',
@@ -266,6 +305,9 @@ const local: App.I18n.Schema = {
         agreement: '我已经仔细阅读并接受',
         protocol: '《用户协议》',
         policy: '《隐私权政策》'
+      },
+      turnstile: {
+        required: '请完成人机验证'
       },
       resetPwd: {
         title: '重置密码'
@@ -316,7 +358,7 @@ const local: App.I18n.Schema = {
     },
     pwd: {
       required: '请输入密码',
-      invalid: '密码格式不正确，6-18位字符，包含字母、数字、下划线'
+      invalid: '密码为 6-32 位字符，可使用字母、数字与特殊符号'
     },
     confirmPwd: {
       required: '请输入确认密码',
@@ -329,6 +371,9 @@ const local: App.I18n.Schema = {
     email: {
       required: '请输入邮箱',
       invalid: '邮箱格式不正确'
+    },
+    alias: {
+      placeholder: '请输入花名（选填）'
     }
   },
   dropdown: {

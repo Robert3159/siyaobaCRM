@@ -1,0 +1,171 @@
+import asyncio
+import json
+import uuid
+from dataclasses import asdict, dataclass
+from datetime import datetime, timezone
+from typing import Any
+
+from fastapi import WebSocket
+
+from app.schemas.user import CurrentUser
+
+QGS_AUTHOR_KEY = "qgs_author"
+
+FIELD_CANDIDATES: dict[str, tuple[str, ...]] = {
+    "country": ("country", "nation", "country_name"),
+    "age": ("age", "age_years"),
+    "server": ("server", "server_name", "zone", "qufu", "region", "area"),
+    "token": ("token", "token_code", "tokenCode", "invite_code", "invitation_code"),
+}
+
+
+@dataclass
+class NotificationMessage:
+    id: str
+    submitter: str
+    country: str
+    age: str
+    server: str
+    token: str
+    summary: str
+    created_at: str
+
+    def to_dict(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _normalize_key(key: Any) -> str:
+    return str(key or "").strip().lower()
+
+
+def _format_value(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, (int, float, bool)):
+        return str(value)
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("label", "name", "value", "id", "code"):
+            if key in value and value[key] is not None:
+                return _format_value(value[key])
+        try:
+            return json.dumps(value, ensure_ascii=False)
+        except TypeError:
+            return str(value)
+    if isinstance(value, (list, tuple, set)):
+        items = [_format_value(item) for item in value]
+        items = [item for item in items if item]
+        return ", ".join(items)
+    return str(value)
+
+
+def _trim_value(value: str, max_len: int = 120) -> str:
+    if len(value) <= max_len:
+        return value
+    return f"{value[:max_len]}..."
+
+
+def _extract_fields(content: dict[str, Any], submitter: str) -> dict[str, str]:
+    normalized = {_normalize_key(k): v for k, v in (content or {}).items()}
+
+    def pick(keys: tuple[str, ...]) -> str:
+        for key in keys:
+            value = normalized.get(_normalize_key(key))
+            formatted = _format_value(value)
+            if formatted:
+                return _trim_value(formatted)
+        return ""
+
+    return {
+        "submitter": _trim_value(submitter),
+        "country": pick(FIELD_CANDIDATES["country"]),
+        "age": pick(FIELD_CANDIDATES["age"]),
+        "server": pick(FIELD_CANDIDATES["server"]),
+        "token": pick(FIELD_CANDIDATES["token"]),
+    }
+
+
+def build_notification_message(content: dict[str, Any], submitter: str) -> NotificationMessage:
+    fields = _extract_fields(content, submitter)
+    fallback = "-"
+    summary = " | ".join(
+        [
+            fields["submitter"] or fallback,
+            fields["country"] or fallback,
+            fields["age"] or fallback,
+            fields["server"] or fallback,
+            fields["token"] or fallback,
+        ]
+    )
+    return NotificationMessage(
+        id=str(uuid.uuid4()),
+        submitter=fields["submitter"] or fallback,
+        country=fields["country"] or fallback,
+        age=fields["age"] or fallback,
+        server=fields["server"] or fallback,
+        token=fields["token"] or fallback,
+        summary=summary,
+        created_at=datetime.now(timezone.utc).isoformat(),
+    )
+
+
+class NotificationHub:
+    def __init__(self) -> None:
+        self._connections: set[WebSocket] = set()
+        self._messages: list[NotificationMessage] = []
+        self._lock = asyncio.Lock()
+
+    async def connect(self, websocket: WebSocket) -> None:
+        await websocket.accept()
+        self._connections.add(websocket)
+        await self._send_snapshot(websocket)
+
+    async def disconnect(self, websocket: WebSocket) -> None:
+        if websocket in self._connections:
+            self._connections.remove(websocket)
+
+    async def _send_snapshot(self, websocket: WebSocket) -> None:
+        async with self._lock:
+            payload = {"type": "snapshot", "messages": [m.to_dict() for m in self._messages]}
+        await websocket.send_json(payload)
+
+    async def broadcast(self, payload: dict[str, Any]) -> None:
+        if not self._connections:
+            return
+        stale: list[WebSocket] = []
+        for conn in list(self._connections):
+            try:
+                await conn.send_json(payload)
+            except Exception:
+                stale.append(conn)
+        for conn in stale:
+            await self.disconnect(conn)
+
+    async def enqueue_message(self, message: NotificationMessage) -> None:
+        async with self._lock:
+            self._messages.append(message)
+        await self.broadcast({"type": "new", "message": message.to_dict()})
+
+    async def claim_message(self, message_id: str, user: CurrentUser) -> bool:
+        removed = None
+        async with self._lock:
+            for idx, msg in enumerate(self._messages):
+                if msg.id == message_id:
+                    removed = self._messages.pop(idx)
+                    break
+
+        if not removed:
+            return False
+
+        await self.broadcast(
+            {
+                "type": "claimed",
+                "id": message_id,
+                "claimer": {"id": user.id, "role": user.role.value},
+            }
+        )
+        return True
+
+
+notification_hub = NotificationHub()

@@ -3,13 +3,12 @@ declare namespace UnionKey {
   /**
    * The login module
    *
-   * - pwd-login: password login
-   * - code-login: phone code login
-   * - register: register
+   * - pwd-login: password login (email + password)
+   * - register: register (email + verification code)
    * - reset-pwd: reset password
    * - bind-wechat: bind wechat
    */
-  type LoginModule = 'pwd-login' | 'code-login' | 'register' | 'reset-pwd' | 'bind-wechat';
+  type LoginModule = 'pwd-login' | 'register' | 'reset-pwd' | 'bind-wechat';
 
   /** Theme scheme */
   type ThemeScheme = 'light' | 'dark' | 'auto';

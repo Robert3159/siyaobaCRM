@@ -104,8 +104,13 @@ export const request = createFlatRequest(
       let message = error.message;
       let backendErrorCode = '';
 
-      // get backend error message and code
-      if (error.code === BACKEND_ERROR_CODE) {
+      // 优先使用后端返回的 msg（含 400 等状态），区分“用户名或密码错误”与“暂无权限登录”等
+      if (error.response?.data) {
+        const data = error.response.data as Record<string, unknown>;
+        backendErrorCode = String(data.code || '');
+        const backendMsg = (data.msg ?? data.message) as string | undefined;
+        if (backendMsg) message = backendMsg;
+      } else if (error.code === BACKEND_ERROR_CODE) {
         message = error.response?.data?.msg || message;
         backendErrorCode = String(error.response?.data?.code || '');
       }

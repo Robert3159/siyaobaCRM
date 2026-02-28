@@ -20,9 +20,32 @@ declare module "@elegant-router/types" {
     "403": "/403";
     "404": "/404";
     "500": "/500";
+    "business": "/business";
+    "business_project": "/business/project";
+    "business_schema": "/business/schema";
+    "dashboard": "/dashboard";
+    "dashboard_hgs": "/dashboard/hgs";
+    "dashboard_overall": "/dashboard/overall";
+    "dashboard_qgs": "/dashboard/qgs";
+    "hgs": "/hgs";
+    "hgs_list": "/hgs/list";
+    "hgs_order": "/hgs/order";
+    "hgs_statistics": "/hgs/statistics";
     "home": "/home";
     "iframe-page": "/iframe-page/:url";
-    "login": "/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?";
+    "login": "/login/:module(pwd-login|register|reset-pwd|bind-wechat)?";
+    "player-list": "/player-list";
+    "qgs": "/qgs";
+    "qgs_list": "/qgs/list";
+    "qgs_statistics": "/qgs/statistics";
+    "qgs_submit": "/qgs/submit";
+    "system": "/system";
+    "system_about": "/system/about";
+    "system_log": "/system/log";
+    "system_menu": "/system/menu";
+    "system_profile": "/system/profile";
+    "system_role": "/system/role";
+    "system_user": "/system/user";
   };
 
   /**
@@ -57,9 +80,15 @@ declare module "@elegant-router/types" {
     | "403"
     | "404"
     | "500"
+    | "business"
+    | "dashboard"
+    | "hgs"
     | "home"
     | "iframe-page"
     | "login"
+    | "player-list"
+    | "qgs"
+    | "system"
   >;
 
   /**
@@ -81,7 +110,25 @@ declare module "@elegant-router/types" {
     | "500"
     | "iframe-page"
     | "login"
+    | "player-list"
+    | "business_project"
+    | "business_schema"
+    | "dashboard_hgs"
+    | "dashboard_overall"
+    | "dashboard_qgs"
+    | "hgs_list"
+    | "hgs_order"
+    | "hgs_statistics"
     | "home"
+    | "qgs_list"
+    | "qgs_statistics"
+    | "qgs_submit"
+    | "system_about"
+    | "system_log"
+    | "system_menu"
+    | "system_profile"
+    | "system_role"
+    | "system_user"
   >;
 
   /**

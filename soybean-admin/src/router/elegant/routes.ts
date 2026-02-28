@@ -40,6 +40,133 @@ export const generatedRoutes: GeneratedRoute[] = [
     }
   },
   {
+    name: 'business',
+    path: '/business',
+    component: 'layout.base',
+    meta: {
+      title: 'business',
+      i18nKey: 'route.business',
+      icon: 'mdi:form-select',
+      order: 5
+    },
+    children: [
+      {
+        name: 'business_project',
+        path: '/business/project',
+        component: 'view.business_project',
+        meta: {
+          title: 'business_project',
+          i18nKey: 'route.business_project',
+          icon: 'mdi:bag-checked',
+          order: 1
+        }
+      },
+      {
+        name: 'business_schema',
+        path: '/business/schema',
+        component: 'view.business_schema',
+        meta: {
+          title: 'business_schema',
+          i18nKey: 'route.business_schema',
+          icon: 'mdi:form-select',
+          order: 2
+        }
+      }
+    ]
+  },
+  {
+    name: 'dashboard',
+    path: '/dashboard',
+    component: 'layout.base',
+    meta: {
+      title: 'dashboard',
+      i18nKey: 'route.dashboard',
+      icon: 'mdi:home-outline',
+      order: 2
+    },
+    children: [
+      {
+        name: 'dashboard_hgs',
+        path: '/dashboard/hgs',
+        component: 'view.dashboard_hgs',
+        meta: {
+          title: 'dashboard_hgs',
+          i18nKey: 'route.dashboard_hgs',
+          icon: 'mdi:chart-areaspline',
+          order: 3
+        }
+      },
+      {
+        name: 'dashboard_overall',
+        path: '/dashboard/overall',
+        component: 'view.dashboard_overall',
+        meta: {
+          title: 'dashboard_overall',
+          i18nKey: 'route.dashboard_overall',
+          icon: 'mdi:chart-box-multiple',
+          order: 1
+        }
+      },
+      {
+        name: 'dashboard_qgs',
+        path: '/dashboard/qgs',
+        component: 'view.dashboard_qgs',
+        meta: {
+          title: 'dashboard_qgs',
+          i18nKey: 'route.dashboard_qgs',
+          icon: 'mdi:chart-areaspline',
+          order: 2
+        }
+      }
+    ]
+  },
+  {
+    name: 'hgs',
+    path: '/hgs',
+    component: 'layout.base',
+    meta: {
+      title: 'hgs',
+      i18nKey: 'route.hgs',
+      icon: 'mdi:monitor-dashboard',
+      order: 4
+    },
+    children: [
+      {
+        name: 'hgs_list',
+        path: '/hgs/list',
+        component: 'view.hgs_list',
+        meta: {
+          title: 'hgs_list',
+          i18nKey: 'route.hgs_list',
+          icon: 'mdi:format-list-bulleted-square',
+          order: 1
+        }
+      },
+      {
+        name: 'hgs_order',
+        path: '/hgs/order',
+        component: 'view.hgs_order',
+        meta: {
+          title: 'hgs_order',
+          i18nKey: 'route.hgs_order',
+          icon: 'mdi:order-bool-ascending',
+          order: 2
+        }
+      },
+      {
+        name: 'hgs_statistics',
+        path: '/hgs/statistics',
+        component: 'view.hgs_statistics',
+        meta: {
+          title: 'hgs_statistics',
+          i18nKey: 'route.hgs_statistics',
+          icon: 'mdi:calendar-month',
+          order: 3
+        }
+      }
+    ]
+  },
+  {
     name: 'home',
     path: '/home',
     component: 'layout.base$view.home',
@@ -65,7 +192,7 @@ export const generatedRoutes: GeneratedRoute[] = [
   },
   {
     name: 'login',
-    path: '/login/:module(pwd-login|code-login|register|reset-pwd|bind-wechat)?',
+    path: '/login/:module(pwd-login|register|reset-pwd|bind-wechat)?',
     component: 'layout.blank$view.login',
     props: true,
     meta: {
@@ -74,5 +201,133 @@ export const generatedRoutes: GeneratedRoute[] = [
       constant: true,
       hideInMenu: true
     }
+  },
+  {
+    name: 'player-list',
+    path: '/player-list',
+    component: 'layout.base$view.player-list',
+    meta: {
+      title: 'player-list',
+      i18nKey: 'route.player-list',
+      constant: true,
+      hideInMenu: true
+    }
+  },
+  {
+    name: 'qgs',
+    path: '/qgs',
+    component: 'layout.base',
+    meta: {
+      title: 'qgs',
+      i18nKey: 'route.qgs',
+      icon: 'mdi:monitor-dashboard',
+      order: 3
+    },
+    children: [
+      {
+        name: 'qgs_list',
+        path: '/qgs/list',
+        component: 'view.qgs_list',
+        meta: {
+          title: 'qgs_list',
+          i18nKey: 'route.qgs_list',
+          icon: 'mdi:format-list-bulleted-square',
+          order: 2
+        }
+      },
+      {
+        name: 'qgs_statistics',
+        path: '/qgs/statistics',
+        component: 'view.qgs_statistics',
+        meta: {
+          title: 'qgs_statistics',
+          i18nKey: 'route.qgs_statistics',
+          icon: 'mdi:calendar-month',
+          order: 3
+        }
+      },
+      {
+        name: 'qgs_submit',
+        path: '/qgs/submit',
+        component: 'view.qgs_submit',
+        meta: {
+          title: 'qgs_submit',
+          i18nKey: 'route.qgs_submit',
+          icon: 'mdi:plus-circle',
+          order: 1
+        }
+      }
+    ]
+  },
+  {
+    name: 'system',
+    path: '/system',
+    component: 'layout.base',
+    meta: {
+      title: 'system',
+      i18nKey: 'route.system',
+      icon: 'mdi:cog-outline',
+      order: 6
+    },
+    children: [
+      {
+        name: 'system_about',
+        path: '/system/about',
+        component: 'view.system_about',
+        meta: {
+          title: 'system_about',
+          i18nKey: 'route.system_about'
+        }
+      },
+      {
+        name: 'system_log',
+        path: '/system/log',
+        component: 'view.system_log',
+        meta: {
+          title: 'system_log',
+          i18nKey: 'route.system_log',
+          icon: 'mdi:file-document-outline',
+          order: 4
+        }
+      },
+      {
+        name: 'system_menu',
+        path: '/system/menu',
+        component: 'view.system_menu',
+        meta: {
+          title: 'system_menu',
+          i18nKey: 'route.system_menu'
+        }
+      },
+      {
+        name: 'system_profile',
+        path: '/system/profile',
+        component: 'view.system_profile',
+        meta: {
+          title: 'system_profile',
+          i18nKey: 'route.system_profile'
+        }
+      },
+      {
+        name: 'system_role',
+        path: '/system/role',
+        component: 'view.system_role',
+        meta: {
+          title: 'system_role',
+          i18nKey: 'route.system_role'
+        }
+      },
+      {
+        name: 'system_user',
+        path: '/system/user',
+        component: 'view.system_user',
+        meta: {
+          title: 'system_user',
+          i18nKey: 'route.system_user',
+          icon: 'mdi:account-multiple',
+          order: 2
+        }
+      }
+    ]
   }
 ];

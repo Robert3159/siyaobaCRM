@@ -4,6 +4,7 @@ import { NConfigProvider, darkTheme } from 'naive-ui';
 import type { WatermarkProps } from 'naive-ui';
 import { useAppStore } from './store/modules/app';
 import { useThemeStore } from './store/modules/theme';
+import { useNotificationStore } from './store/modules/notification';
 import { naiveDateLocales, naiveLocales } from './locales/naive';
 
 defineOptions({
@@ -12,6 +13,7 @@ defineOptions({
 
 const appStore = useAppStore();
 const themeStore = useThemeStore();
+useNotificationStore();
 
 const naiveDarkTheme = computed(() => (themeStore.darkMode ? darkTheme : undefined));
 

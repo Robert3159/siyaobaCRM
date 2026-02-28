@@ -12,7 +12,7 @@ import { getRouteName, getRoutePath } from '@/router/elegant/transform';
 import { useAuthStore } from '../auth';
 import { useTabStore } from '../tab';
 import {
-  filterAuthRoutesByRoles,
+  filterAuthRoutesByRouteNames,
   getBreadcrumbsByRoute,
   getCacheRouteNames,
   getGlobalMenusByAuthRoutes,
@@ -24,6 +24,8 @@ import {
 } from './shared';
 
 export const useRouteStore = defineStore(SetupStoreId.Route, () => {
+  const alwaysVisibleStaticRouteNames: RouteKey[] = ['system_about'];
+
   const authStore = useAuthStore();
   const tabStore = useTabStore();
   const { bool: isInitConstantRoute, setBool: setIsInitConstantRoute } = useBoolean();
@@ -48,6 +50,22 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
    */
   function setRouteHome(routeKey: LastLevelRouteKey) {
     routeHome.value = routeKey;
+  }
+
+  function resolveStaticHomeRoute(candidates: Array<string | null | undefined>, routes: ElegantConstRoute[]) {
+    const seen = new Set<string>();
+    for (const candidate of candidates) {
+      const routeName = (candidate || '').trim();
+      const isValidCandidate = Boolean(routeName) && !seen.has(routeName);
+      if (isValidCandidate) {
+        seen.add(routeName);
+
+        if (isRouteExistByRouteName(routeName as RouteKey, routes)) {
+          return routeName as LastLevelRouteKey;
+        }
+      }
+    }
+    return null;
   }
 
   /** constant routes */
@@ -174,35 +192,53 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
     tabStore.initHomeTab();
   }
 
-  /** Init auth route */
+  /** Init auth route（try/finally 保证始终标记已初始化，避免异常时重复进入导致死循环） */
   async function initAuthRoute() {
-    // check if user info is initialized
-    if (!authStore.userInfo.userId) {
-      await authStore.initUserInfo();
+    if (isInitAuthRoute.value) return;
+    try {
+      if (!authStore.userInfo.userId) {
+        await authStore.initUserInfo();
+      }
+      if (authRouteMode.value === 'static') {
+        initStaticAuthRoute();
+      } else {
+        await initDynamicAuthRoute();
+      }
+      tabStore.initHomeTab();
+    } catch {
+      authStore.resetStore();
+    } finally {
+      setIsInitAuthRoute(true);
     }
-
-    if (authRouteMode.value === 'static') {
-      initStaticAuthRoute();
-    } else {
-      await initDynamicAuthRoute();
-    }
-
-    tabStore.initHomeTab();
   }
 
   /** Init static auth route */
   function initStaticAuthRoute() {
     const { authRoutes: staticAuthRoutes } = createStaticRoutes();
+    let currentAuthRoutes: ElegantConstRoute[] = staticAuthRoutes;
 
     if (authStore.isStaticSuper) {
       addAuthRoutes(staticAuthRoutes);
     } else {
-      const filteredAuthRoutes = filterAuthRoutesByRoles(staticAuthRoutes, authStore.userInfo.roles);
+      const allowedRouteNames = Array.from(
+        new Set([...authStore.userInfo.availableHomeRoutes, ...alwaysVisibleStaticRouteNames])
+      );
+      const filteredAuthRoutes = filterAuthRoutesByRouteNames(staticAuthRoutes, allowedRouteNames);
 
       addAuthRoutes(filteredAuthRoutes);
+      currentAuthRoutes = filteredAuthRoutes;
     }
 
     handleConstantAndAuthRoutes();
+
+    const resolvedHome = resolveStaticHomeRoute(
+      [authStore.userInfo.homeRoute, ...authStore.userInfo.availableHomeRoutes, routeHome.value],
+      currentAuthRoutes
+    );
+    if (resolvedHome) {
+      setRouteHome(resolvedHome);
+      handleUpdateRootRouteRedirect(resolvedHome);
+    }
 
     setIsInitAuthRoute(true);
   }
@@ -211,20 +247,18 @@ export const useRouteStore = defineStore(SetupStoreId.Route, () => {
   async function initDynamicAuthRoute() {
     const { data, error } = await fetchGetUserRoutes();
 
-    if (!error) {
+    if (!error && data) {
       const { routes, home } = data;
 
-      addAuthRoutes(routes);
+      addAuthRoutes(routes || []);
 
       handleConstantAndAuthRoutes();
 
-      setRouteHome(home);
-
-      handleUpdateRootRouteRedirect(home);
-
-      setIsInitAuthRoute(true);
+      if (home) {
+        setRouteHome(home);
+        handleUpdateRootRouteRedirect(home);
+      }
     } else {
-      // if fetch user routes failed, reset store
       authStore.resetStore();
     }
   }

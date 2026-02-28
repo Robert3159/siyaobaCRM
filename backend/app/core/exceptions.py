@@ -20,7 +20,7 @@ class BusinessError(Exception):
 def business_error_handler(_: Request, exc: BusinessError) -> JSONResponse:
     return JSONResponse(
         status_code=HTTP_400_BAD_REQUEST,
-        content={"code": exc.code, "message": exc.message},
+        content={"code": exc.code, "message": exc.message, "msg": exc.message},
     )
 
 
@@ -32,6 +32,7 @@ def validation_error_handler(
         content={
             "code": "VALIDATION_ERROR",
             "message": "请求参数校验失败",
+            "msg": "请求参数校验失败",
             "details": exc.errors(),
         },
     )

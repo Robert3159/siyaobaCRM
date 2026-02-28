@@ -1,13 +1,34 @@
 """
-Prisma Client 及模型引用。
+SQLAlchemy 模型与数据库会话。
 
-注意：
 - 所有数据库访问必须通过 Service 层封装；
-- Router 层禁止直接使用 Prisma Client。
+- Router 层禁止直接使用 Session / 执行原始 SQL。
 """
 
-from prisma import Prisma
+from app.models.base import (
+    Base,
+    Customer,
+    Department,
+    Form,
+    Menu,
+    Player,
+    Project,
+    RolePermission,
+    SystemRole,
+    Team,
+    User,
+)
 
-prisma = Prisma()
-
-
+__all__ = [
+    "Base",
+    "User",
+    "Department",
+    "Team",
+    "Customer",
+    "Project",
+    "Form",
+    "Menu",
+    "Player",
+    "RolePermission",
+    "SystemRole",
+]

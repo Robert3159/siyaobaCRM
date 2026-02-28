@@ -59,6 +59,10 @@ declare namespace App {
           /** Whether to show the GlobalSearch */
           visible: boolean;
         };
+        notification: {
+          /** Whether to show the notification */
+          visible: boolean;
+        };
       };
       /** Tab */
       tab: {
@@ -471,6 +475,19 @@ declare namespace App {
             title: string;
             visible: string;
           };
+          notification: {
+            title: string;
+            visible: string;
+            placeholder: string;
+            empty: string;
+            connecting: string;
+            submitter: string;
+            country: string;
+            age: string;
+            server: string;
+            token: string;
+            claim: string;
+          };
         };
         configOperation: {
           copyConfig: string;
@@ -485,6 +502,7 @@ declare namespace App {
           common: {
             loginOrRegister: string;
             userNamePlaceholder: string;
+            emailPlaceholder: string;
             phonePlaceholder: string;
             codePlaceholder: string;
             passwordPlaceholder: string;
@@ -495,6 +513,10 @@ declare namespace App {
             validateSuccess: string;
             loginSuccess: string;
             welcomeBack: string;
+            accountPending: string;
+          };
+          turnstile: {
+            required: string;
           };
           pwdLogin: {
             title: string;
@@ -559,6 +581,7 @@ declare namespace App {
       form: {
         required: string;
         userName: FormMsg;
+        alias: { placeholder: string };
         phone: FormMsg;
         pwd: FormMsg;
         confirmPwd: FormMsg;

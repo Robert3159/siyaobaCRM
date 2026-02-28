@@ -9,13 +9,21 @@ from app.core.config import settings
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
+# bcrypt 只接受最多 72 字节，超出会报 ValueError；按字节截断后再哈希/校验
+_BCRYPT_MAX_BYTES = 72
+
+
+def _truncate_for_bcrypt(password: str) -> str:
+    b = password.encode("utf-8")[:_BCRYPT_MAX_BYTES]
+    return b.decode("utf-8", errors="ignore")
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return pwd_context.verify(plain_password, hashed_password)
+    return pwd_context.verify(_truncate_for_bcrypt(plain_password), hashed_password)
 
 
 def get_password_hash(password: str) -> str:
-    return pwd_context.hash(password)
+    return pwd_context.hash(_truncate_for_bcrypt(password))
 
 
 def create_access_token(
