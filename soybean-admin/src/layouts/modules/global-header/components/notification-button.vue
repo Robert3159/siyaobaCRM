@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { $t } from '@/locales';
 import { useNotificationStore } from '@/store/modules/notification';
 import { formatUtc8DateTime } from '@/utils/datetime';
+import { $t } from '@/locales';
 
 defineOptions({
   name: 'NotificationButton'
@@ -18,7 +18,6 @@ const connecting = computed(() => notificationStore.connecting);
 function formatValue(value?: string) {
   return value && value.trim() ? value : '-';
 }
-
 </script>
 
 <template>
@@ -69,12 +68,7 @@ function formatValue(value?: string) {
           </div>
           <div class="notification-item__footer">
             <span class="notification-item__time">{{ formatUtc8DateTime(item.created_at) }}</span>
-            <NButton
-              v-if="canClaim"
-              size="tiny"
-              type="primary"
-              @click="notificationStore.claimMessage(item.id)"
-            >
+            <NButton v-if="canClaim" size="tiny" type="primary" @click="notificationStore.claimMessage(item.id)">
               {{ $t('theme.general.notification.claim') }}
             </NButton>
           </div>
