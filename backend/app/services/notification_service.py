@@ -7,21 +7,68 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from app.schemas.user import CurrentUser
-
 QGS_AUTHOR_KEY = "qgs_author"
 
 FIELD_CANDIDATES: dict[str, tuple[str, ...]] = {
-    "country": ("country", "nation", "country_name"),
-    "age": ("age", "age_years"),
-    "server": ("server", "server_name", "zone", "qufu", "region", "area"),
-    "token": ("token", "token_code", "tokenCode", "invite_code", "invitation_code"),
+    "country": (
+        "country",
+        "nation",
+        "country_name",
+        "countryName",
+        "nationality",
+        "国家",
+        "国籍",
+    ),
+    "age": (
+        "age",
+        "age_years",
+        "age_year",
+        "ageYears",
+        "years",
+        "年龄",
+        "年纪",
+        "岁",
+        "年龄段",
+    ),
+    "server": (
+        "server",
+        "server_name",
+        "serverName",
+        "server_id",
+        "serverId",
+        "zone",
+        "zone_id",
+        "qufu",
+        "region",
+        "region_name",
+        "area",
+        "区服",
+        "服务器",
+        "服务器名",
+        "大区",
+        "区",
+        "服",
+    ),
+    "token": (
+        "token",
+        "token_code",
+        "tokenCode",
+        "invite_code",
+        "invitation_code",
+        "token码",
+        "邀请码",
+        "邀請码",
+        "邀請碼",
+        "激活码",
+        "兑换码",
+    ),
 }
 
 
 @dataclass
 class NotificationMessage:
     id: str
+    player_id: int
     submitter: str
     country: str
     age: str
@@ -86,7 +133,11 @@ def _extract_fields(content: dict[str, Any], submitter: str) -> dict[str, str]:
     }
 
 
-def build_notification_message(content: dict[str, Any], submitter: str) -> NotificationMessage:
+def build_notification_message(
+    content: dict[str, Any],
+    submitter: str,
+    player_id: int,
+) -> NotificationMessage:
     fields = _extract_fields(content, submitter)
     fallback = "-"
     summary = " | ".join(
@@ -100,6 +151,7 @@ def build_notification_message(content: dict[str, Any], submitter: str) -> Notif
     )
     return NotificationMessage(
         id=str(uuid.uuid4()),
+        player_id=player_id,
         submitter=fields["submitter"] or fallback,
         country=fields["country"] or fallback,
         age=fields["age"] or fallback,
@@ -147,25 +199,19 @@ class NotificationHub:
             self._messages.append(message)
         await self.broadcast({"type": "new", "message": message.to_dict()})
 
-    async def claim_message(self, message_id: str, user: CurrentUser) -> bool:
-        removed = None
+    async def claim_message(self, message_id: str) -> NotificationMessage | None:
+        removed: NotificationMessage | None = None
         async with self._lock:
             for idx, msg in enumerate(self._messages):
                 if msg.id == message_id:
                     removed = self._messages.pop(idx)
                     break
 
-        if not removed:
-            return False
+        return removed
 
-        await self.broadcast(
-            {
-                "type": "claimed",
-                "id": message_id,
-                "claimer": {"id": user.id, "role": user.role.value},
-            }
-        )
-        return True
+    async def restore_message(self, message: NotificationMessage) -> None:
+        async with self._lock:
+            self._messages.insert(0, message)
 
 
 notification_hub = NotificationHub()

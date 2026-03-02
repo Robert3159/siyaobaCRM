@@ -37,27 +37,57 @@ async def get_async_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+async def _is_column_nullable(conn, table_name: str, column_name: str, schema: str = "public") -> bool | None:
+    result = await conn.execute(
+        text(
+            "SELECT is_nullable "
+            "FROM information_schema.columns "
+            "WHERE table_schema = :schema AND table_name = :table_name AND column_name = :column_name"
+        ),
+        {"schema": schema, "table_name": table_name, "column_name": column_name},
+    )
+    value = result.scalar_one_or_none()
+    if value is None:
+        return None
+    return value == "YES"
+
+
 async def _run_startup_migrations() -> None:
     async with engine.begin() as conn:
-        await conn.execute(text('ALTER TABLE "Project" ALTER COLUMN department_id DROP NOT NULL'))
-        await conn.execute(text('ALTER TABLE "Project" ALTER COLUMN team_id DROP NOT NULL'))
-        await conn.execute(text('ALTER TABLE "Player" ALTER COLUMN department_id DROP NOT NULL'))
-        await conn.execute(text('ALTER TABLE "Player" ALTER COLUMN team_id DROP NOT NULL'))
+        await conn.execute(text("SET LOCAL statement_timeout = '5min'"))
+        project_department_nullable = await _is_column_nullable(conn, "Project", "department_id")
+        if project_department_nullable is False:
+            await conn.execute(text('ALTER TABLE "Project" ALTER COLUMN department_id DROP NOT NULL'))
+
+        project_team_nullable = await _is_column_nullable(conn, "Project", "team_id")
+        if project_team_nullable is False:
+            await conn.execute(text('ALTER TABLE "Project" ALTER COLUMN team_id DROP NOT NULL'))
+
+        player_department_nullable = await _is_column_nullable(conn, "Player", "department_id")
+        if player_department_nullable is False:
+            await conn.execute(text('ALTER TABLE "Player" ALTER COLUMN department_id DROP NOT NULL'))
+
+        player_team_nullable = await _is_column_nullable(conn, "Player", "team_id")
+        if player_team_nullable is False:
+            await conn.execute(text('ALTER TABLE "Player" ALTER COLUMN team_id DROP NOT NULL'))
+
         await conn.execute(text('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS avatar TEXT'))
         await conn.execute(text('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS enabled BOOLEAN NOT NULL DEFAULT TRUE'))
-        await conn.execute(text(
-            'ALTER TABLE "User" ADD COLUMN IF NOT EXISTS managed_team_ids JSONB NOT NULL DEFAULT \'[]\'::jsonb'
-        ))
+        await conn.execute(
+            text('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS managed_team_ids JSONB NOT NULL DEFAULT \'[]\'::jsonb')
+        )
         await conn.execute(text('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS manager_id INTEGER'))
-        await conn.execute(text(
-            'CREATE TABLE IF NOT EXISTS "SystemRole" ('
-            'id SERIAL PRIMARY KEY, '
-            'role_name VARCHAR(64) NOT NULL UNIQUE, '
-            'home_route VARCHAR(64) NULL, '
-            'created_at TIMESTAMP NOT NULL DEFAULT NOW(), '
-            'updated_at TIMESTAMP NOT NULL DEFAULT NOW()'
-            ')'
-        ))
+        await conn.execute(
+            text(
+                'CREATE TABLE IF NOT EXISTS "SystemRole" ('
+                'id SERIAL PRIMARY KEY, '
+                'role_name VARCHAR(64) NOT NULL UNIQUE, '
+                'home_route VARCHAR(64) NULL, '
+                'created_at TIMESTAMP NOT NULL DEFAULT NOW(), '
+                'updated_at TIMESTAMP NOT NULL DEFAULT NOW()'
+                ')'
+            )
+        )
         await conn.execute(text('ALTER TABLE "SystemRole" ADD COLUMN IF NOT EXISTS home_route VARCHAR(64)'))
 
 

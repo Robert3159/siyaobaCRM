@@ -54,6 +54,19 @@ def _display_user_name(alias: str | None, user: str) -> str:
     return alias_text or user
 
 
+async def resolve_user_display_name(session: AsyncSession, user_id: int) -> str | None:
+    result = await session.execute(
+        select(User.alias, User.user).where(
+            User.id == user_id,
+            User.is_deleted == False,
+        )
+    )
+    row = result.first()
+    if not row:
+        return None
+    return _display_user_name(row[0], row[1])
+
+
 def _normalize_positive_int(raw: object, field_name: str) -> int:
     try:
         value = int(raw)

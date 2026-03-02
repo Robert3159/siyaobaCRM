@@ -15,8 +15,21 @@ const messages = computed(() => notificationStore.messages);
 const canClaim = computed(() => notificationStore.canClaim);
 const connecting = computed(() => notificationStore.connecting);
 
-function formatValue(value?: string) {
-  return value && value.trim() ? value : '-';
+function formatValue(value: unknown) {
+  if (value === null || value === undefined || value === '') return '-';
+  if (Array.isArray(value)) {
+    const normalized = value.map(item => String(item)).filter(item => item.trim());
+    return normalized.length ? normalized.join(', ') : '-';
+  }
+  if (typeof value === 'object') {
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return '-';
+    }
+  }
+  const text = String(value).trim();
+  return text || '-';
 }
 </script>
 
@@ -68,7 +81,14 @@ function formatValue(value?: string) {
           </div>
           <div class="notification-item__footer">
             <span class="notification-item__time">{{ formatUtc8DateTime(item.created_at) }}</span>
-            <NButton v-if="canClaim" size="tiny" type="primary" @click="notificationStore.claimMessage(item.id)">
+            <NButton
+              v-if="canClaim"
+              size="tiny"
+              type="primary"
+              :loading="notificationStore.isClaiming(item.id)"
+              :disabled="notificationStore.isClaiming(item.id)"
+              @click="notificationStore.claimMessage(item.id)"
+            >
               {{ $t('theme.general.notification.claim') }}
             </NButton>
           </div>

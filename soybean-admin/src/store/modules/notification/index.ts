@@ -1,18 +1,18 @@
 import { computed, ref, watch } from 'vue';
 import { defineStore } from 'pinia';
 import { router } from '@/router';
-import { SetupStoreId } from '@/enum';
-import { $t } from '@/locales';
-import { localStg } from '@/utils/storage';
 import { useAuthStore } from '@/store/modules/auth';
 import { useAppStore } from '@/store/modules/app';
+import { localStg } from '@/utils/storage';
+import { SetupStoreId } from '@/enum';
+import { $t } from '@/locales';
 
 type NotificationMessage = Api.Notification.Message;
 
 type WsPayload =
   | { type: 'snapshot'; messages: NotificationMessage[] }
   | { type: 'new'; message: NotificationMessage }
-  | { type: 'claimed'; id: string; claimer?: { id: number; role: string } }
+  | { type: 'claimed'; id: string; player_id?: number; claimer?: { id: number; role: string; alias?: string } }
   | { type: 'error'; message?: string };
 
 const MAX_RECONNECT_DELAY = 10000;
@@ -24,11 +24,33 @@ export const useNotificationStore = defineStore(SetupStoreId.Notification, () =>
   const messages = ref<NotificationMessage[]>([]);
   const connected = ref(false);
   const connecting = ref(false);
+  const lastClaimed = ref<{
+    id: string;
+    player_id?: number;
+    claimer?: { id: number; role: string; alias?: string };
+  } | null>(null);
+  const pendingClaimIds = ref<Set<string>>(new Set());
 
   let socket: WebSocket | null = null;
   let reconnectTimer: number | null = null;
   let reconnectAttempts = 0;
-  let pendingClaimIds = new Set<string>();
+  function setClaiming(id: string, active: boolean) {
+    const next = new Set(pendingClaimIds.value);
+    if (active) {
+      next.add(id);
+    } else {
+      next.delete(id);
+    }
+    pendingClaimIds.value = next;
+  }
+
+  function clearClaiming() {
+    pendingClaimIds.value = new Set();
+  }
+
+  function isClaiming(id: string) {
+    return pendingClaimIds.value.has(id);
+  }
 
   const pendingCount = computed(() => messages.value.length);
 
@@ -131,7 +153,7 @@ export const useNotificationStore = defineStore(SetupStoreId.Notification, () =>
 
   function disconnect() {
     resetReconnectState();
-    pendingClaimIds = new Set();
+    clearClaiming();
     if (socket) {
       socket.close();
       socket = null;
@@ -142,9 +164,75 @@ export const useNotificationStore = defineStore(SetupStoreId.Notification, () =>
   }
 
   function claimMessage(id: string) {
-    if (!socket || socket.readyState !== WebSocket.OPEN) return;
-    pendingClaimIds.add(id);
-    socket.send(JSON.stringify({ type: 'claim', id }));
+    const claimId = String(id || '').trim();
+    if (!claimId) return;
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+      window.$message?.warning('通知连接尚未建立，请稍后重试');
+      return;
+    }
+    if (pendingClaimIds.value.has(claimId)) return;
+    setClaiming(claimId, true);
+    socket.send(JSON.stringify({ type: 'claim', id: claimId }));
+  }
+
+  function handleSnapshot(payload: Extract<WsPayload, { type: 'snapshot' }>) {
+    const list = Array.isArray(payload.messages) ? payload.messages : [];
+    messages.value = list;
+  }
+
+  function handleNew(payload: Extract<WsPayload, { type: 'new' }>) {
+    const message = payload.message;
+    if (!message) return;
+    if (messages.value.some(item => item.id === message.id)) return;
+    messages.value = [message, ...messages.value];
+  }
+
+  function handleError() {
+    if (pendingClaimIds.value.size === 0) return;
+    clearClaiming();
+    window.$message?.error('认领失败，请稍后重试');
+  }
+
+  function handleClaimed(payload: Extract<WsPayload, { type: 'claimed' }>) {
+    const id = payload.id;
+    if (!id) return;
+    const wasPending = pendingClaimIds.value.has(id);
+    if (wasPending) {
+      setClaiming(id, false);
+    }
+    messages.value = messages.value.filter(item => item.id !== id);
+    lastClaimed.value = {
+      id,
+      player_id: payload.player_id,
+      claimer: payload.claimer
+    };
+    const currentUserId = authStore.userInfo.userId;
+    const claimerId = payload.claimer?.id;
+    if (currentUserId && claimerId !== undefined && String(claimerId) === String(currentUserId)) {
+      window.$message?.success('认领成功');
+    } else if (wasPending) {
+      const alias = (payload.claimer?.alias || '').trim();
+      window.$message?.warning(alias ? `已被 ${alias} 认领` : '已被其他人认领');
+    }
+  }
+
+  function handlePayload(payload: WsPayload) {
+    switch (payload.type) {
+      case 'snapshot':
+        handleSnapshot(payload);
+        return;
+      case 'new':
+        handleNew(payload);
+        return;
+      case 'error':
+        handleError();
+        return;
+      case 'claimed':
+        handleClaimed(payload);
+        break;
+      default:
+        break;
+    }
   }
 
   function handleMessage(raw: string) {
@@ -156,25 +244,7 @@ export const useNotificationStore = defineStore(SetupStoreId.Notification, () =>
     }
 
     if (!payload || typeof payload !== 'object') return;
-
-    if (payload.type === 'snapshot') {
-      const list = Array.isArray(payload.messages) ? payload.messages : [];
-      messages.value = list;
-      return;
-    }
-
-    if (payload.type === 'new' && payload.message) {
-      if (messages.value.some(item => item.id === payload.message.id)) return;
-      messages.value = [payload.message, ...messages.value];
-      return;
-    }
-
-    if (payload.type === 'claimed') {
-      const id = payload.id;
-      if (!id) return;
-      messages.value = messages.value.filter(item => item.id !== id);
-      pendingClaimIds.delete(id);
-    }
+    handlePayload(payload);
   }
 
   function syncDocumentTitle() {
@@ -217,9 +287,11 @@ export const useNotificationStore = defineStore(SetupStoreId.Notification, () =>
     pendingCount,
     connected,
     connecting,
+    lastClaimed,
     canClaim,
     connect,
     disconnect,
-    claimMessage
+    claimMessage,
+    isClaiming
   };
 });

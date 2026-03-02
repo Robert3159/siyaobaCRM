@@ -51,8 +51,8 @@ export const routeMetaOverrides: Record<string, RouteMetaOverride> = {
   system_role: { meta: { order: 3, icon: 'mdi:book-account' } },
   system_menu: { meta: { order: 4, icon: 'mdi:menu-open', hideInMenu: true } },
   system_log: { meta: { order: 5, icon: 'mdi:file-document-outline' } },
-  system_profile: { meta: { order: 6, icon: 'mdi:account-circle' } },
-  system_about: { meta: { order: 7, icon: 'mdi:information-outline' } }
+  system_profile: { meta: { order: 7, icon: 'mdi:account-circle' } },
+  system_about: { meta: { order: 6, icon: 'mdi:information-outline' } }
 };
 
 export function applyRouteMetaOverrides(

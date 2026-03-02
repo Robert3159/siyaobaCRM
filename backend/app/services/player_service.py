@@ -7,35 +7,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import BusinessError
 from app.core.scope import build_scope_filter
 from app.guards import assert_can_update
-from app.models import Player, Project, User
+from app.models import Player, Project
 from app.schemas.user import CurrentUser
 from app.services.notification_service import QGS_AUTHOR_KEY, build_notification_message, notification_hub
+from app.services.user_service import resolve_user_display_name
 
 SERVER_CONTENT_KEYS = ("server", "server_name", "zone", "qufu", "region", "area")
+HGS_MAINTAINER_KEY = "hgs_maintainer"
 logger = logging.getLogger(__name__)
 
 
 def _scope_conditions(model: type, scope: dict) -> list:
     return [getattr(model, key) == value for key, value in scope.items()]
-
-
-async def _resolve_user_alias(session: AsyncSession, user_id: int) -> str | None:
-    result = await session.execute(
-        select(User.alias, User.user).where(
-            User.id == user_id,
-            User.is_deleted == False,
-        )
-    )
-    row = result.first()
-    if not row:
-        return None
-
-    alias = (row[0] or "").strip()
-    if alias:
-        return alias
-
-    fallback = (row[1] or "").strip()
-    return fallback or None
 
 
 async def submit_player(
@@ -59,7 +42,7 @@ async def submit_player(
         raise BusinessError(code="PROJECT_NOT_FOUND", message="项目不存在或未启用")
 
     next_content = dict(content or {})
-    submitter_alias = await _resolve_user_alias(session, user.id)
+    submitter_alias = await resolve_user_display_name(session, user.id)
     if submitter_alias:
         next_content[QGS_AUTHOR_KEY] = submitter_alias
 
@@ -76,11 +59,44 @@ async def submit_player(
 
     try:
         submitter = submitter_alias or f"User-{user.id}"
-        message = build_notification_message(next_content, submitter)
+        message = build_notification_message(next_content, submitter, player.id)
         await notification_hub.enqueue_message(message)
     except Exception:
         logger.exception("Failed to broadcast notification message")
     return player
+
+
+async def assign_hgs_maintainer(
+    session: AsyncSession,
+    user: CurrentUser,
+    player_id: int,
+    alias: str,
+) -> bool:
+    if not alias:
+        return False
+
+    scope = build_scope_filter(user, "player")
+    query = select(Player).where(
+        and_(
+            Player.id == player_id,
+            Player.is_deleted == False,
+            *_scope_conditions(Player, scope),
+        )
+    )
+    player = (await session.execute(query)).scalars().first()
+    if player is None:
+        return False
+
+    content = dict(player.content or {})
+    existing = content.get(HGS_MAINTAINER_KEY)
+    if isinstance(existing, str) and existing.strip():
+        return True
+
+    content[HGS_MAINTAINER_KEY] = alias
+    player.content = content
+    await session.flush()
+    await session.refresh(player)
+    return True
 
 
 async def list_players(

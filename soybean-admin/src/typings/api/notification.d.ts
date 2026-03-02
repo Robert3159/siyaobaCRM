@@ -2,6 +2,7 @@ declare namespace Api {
   namespace Notification {
     interface Message {
       id: string;
+      player_id?: number;
       submitter: string;
       country?: string;
       age?: string;

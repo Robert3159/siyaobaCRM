@@ -8,6 +8,7 @@ import { fetchPlayerList, updatePlayer } from '@/service/api/player';
 import { fetchProjectList } from '@/service/api/project';
 import { fetchSchemaByCode } from '@/service/api/schema';
 import { useAuthStore } from '@/store/modules/auth';
+import { useNotificationStore } from '@/store/modules/notification';
 import { formatUtc8DateTime } from '@/utils/datetime';
 
 interface PlayerListField {
@@ -57,6 +58,7 @@ const props = withDefaults(
 const columnWidthStorageKey = computed(() => `${COLUMN_WIDTH_STORAGE_KEY_PREFIX}:${props.preset}`);
 
 const authStore = useAuthStore();
+const notificationStore = useNotificationStore();
 const loading = ref(false);
 const tableData = ref<Api.Player.Item[]>([]);
 const total = ref(0);
@@ -90,6 +92,30 @@ const currentUserRoles = computed(() => normalizeRoleList(authStore.userInfo?.ro
 
 function isStaticColumnKey(key: string): key is StaticColumnKey {
   return key === 'project_id' || key === 'created_at' || key === 'actions';
+}
+
+function applyClaimedMaintainer(payload: {
+  player_id?: number;
+  claimer?: { alias?: string };
+} | null) {
+  if (!payload?.player_id) return;
+  const alias = (payload.claimer?.alias || '').trim();
+  if (!alias) return;
+
+  const index = tableData.value.findIndex(row => row.id === payload.player_id);
+  if (index < 0) return;
+
+  const row = tableData.value[index];
+  const nextContent = { ...(row.content || {}) };
+  const existing = nextContent[HGS_MAINTAINER_KEY];
+  if (typeof existing === 'string' && existing.trim()) return;
+
+  nextContent[HGS_MAINTAINER_KEY] = alias;
+  tableData.value = [
+    ...tableData.value.slice(0, index),
+    { ...row, content: nextContent },
+    ...tableData.value.slice(index + 1)
+  ];
 }
 
 const searchModel = reactive({
@@ -410,6 +436,13 @@ restoreColumnWidths();
 watch(visiblePageKey, () => {
   loadSchema();
 });
+
+watch(
+  () => notificationStore.lastClaimed,
+  payload => {
+    applyClaimedMaintainer(payload);
+  }
+);
 
 watch(
   sourceContentFields,
