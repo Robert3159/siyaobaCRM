@@ -212,11 +212,13 @@ const local: App.I18n.Schema = {
         visible: '显示全局搜索按钮'
       },
       notification: {
-        title: '通知',
+        title: '注册认领池',
         visible: '显示通知按钮',
         placeholder: '暂无通知，后续对接 WebSocket',
         empty: '暂无待认领消息',
         connecting: '连接中...',
+        broadcasting: '广播中',
+        disconnected: '已断开',
         submitter: '提交人',
         country: '国家',
         age: '年龄',
@@ -252,7 +254,6 @@ const local: App.I18n.Schema = {
     hgs_order: '订单列表',
     hgs_statistics: '数据统计',
     business: '业务中心',
-    'business_player-list': '玩家总表',
     business_project: '项目管理',
     business_schema: '表单管理',
     system: '系统设置',

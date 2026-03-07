@@ -481,6 +481,8 @@ declare namespace App {
             placeholder: string;
             empty: string;
             connecting: string;
+            broadcasting: string;
+            disconnected: string;
             submitter: string;
             country: string;
             age: string;

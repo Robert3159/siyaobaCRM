@@ -11,6 +11,7 @@ import {
   updateUser
 } from '@/service/api/user';
 import { fetchRoleList } from '@/service/api/role';
+import OrganizationChart from '@/components/business/organization-chart.vue';
 
 const loading = ref(false);
 const tableData = ref<Api.User.UserItem[]>([]);
@@ -81,8 +82,36 @@ const formModel = reactive<{
   enabled: true
 });
 
+const orgChartVisible = ref(false);
+const orgChartUsers = ref<Api.User.UserItem[]>([]);
+
+async function showOrgChart() {
+  try {
+    const { data, error } = await fetchUserList({ page: 1, page_size: 1000 });
+    if (!error && Array.isArray(data?.items)) {
+      orgChartUsers.value = data.items;
+      orgChartVisible.value = true;
+    }
+  } catch {
+    window.$message?.error('加载组织架构失败');
+  }
+}
+
 function isDirectorRole(role: string | null | undefined) {
   return role === 'QGS_DIRECTOR' || role === 'HGS_DIRECTOR';
+}
+
+function getDepartmentFromRole(role: string | null): string {
+  if (!role) return '未设置';
+  if (role.startsWith('QGS_')) return 'QGS';
+  if (role.startsWith('HGS_')) return 'HGS';
+  return '未知';
+}
+
+function getDepartmentIdFromRole(role: string): number | null {
+  if (role.startsWith('QGS_')) return 1;
+  if (role.startsWith('HGS_')) return 2;
+  return null;
 }
 
 const isDirectorFormRole = computed(() => isDirectorRole(formModel.role));
@@ -132,17 +161,6 @@ const managerSelectOptions = computed(() => {
     }));
 });
 
-const managedUserSelectOptions = computed(() => {
-  const managerRole = formModel.role;
-  const currentId = currentUser.value?.id;
-  return userOptions.value
-    .filter(item => item.id !== currentId && canManageRole(managerRole, item.role))
-    .map(item => ({
-      label: `${getUserOptionLabel(item)} · ${getRoleLabel(item.role)}`,
-      value: item.id
-    }));
-});
-
 function getRoleLabel(role: string | null | undefined) {
   if (!role) return '-';
   return roleLabelMap.value[role] || role;
@@ -167,37 +185,15 @@ function getUnassignedTagColor() {
 }
 
 function getTeamDisplayText(row: Api.User.UserItem) {
-  if (isDirectorRole(row.role)) {
-    if (Array.isArray(row.managed_team_names) && row.managed_team_names.length > 0) {
-      return row.managed_team_names.join(' / ');
-    }
-    if (Array.isArray(row.managed_team_ids) && row.managed_team_ids.length > 0) {
-      return `管理 ${row.managed_team_ids.length} 个团队`;
-    }
-    return '未设置';
-  }
   return row.team_name ?? (row.team_id === null ? '未分配' : '-');
 }
 
 function getTeamTagColor(row: Api.User.UserItem) {
-  if (isDirectorRole(row.role)) {
-    return (row.managed_team_ids?.length ?? 0) > 0 ? getOrgTagColor('team') : getUnassignedTagColor();
-  }
   return row.team_id === null ? getUnassignedTagColor() : getOrgTagColor('team');
 }
 
 function getManagerDisplayText(row: Api.User.UserItem) {
   return row.manager_name ?? (row.manager_id ? `#${row.manager_id}` : '未设置');
-}
-
-function getManagedUserDisplayText(row: Api.User.UserItem) {
-  if (Array.isArray(row.managed_user_names) && row.managed_user_names.length > 0) {
-    return row.managed_user_names.join(' / ');
-  }
-  if (Array.isArray(row.managed_user_ids) && row.managed_user_ids.length > 0) {
-    return `管理 ${row.managed_user_ids.length} 人`;
-  }
-  return '未设置';
 }
 
 const columns: NaiveUI.DataTableBaseColumn<Api.User.UserItem>[] = [
@@ -258,20 +254,6 @@ const columns: NaiveUI.DataTableBaseColumn<Api.User.UserItem>[] = [
           color: row.manager_id ? getOrgTagColor('department') : getUnassignedTagColor()
         },
         { default: () => getManagerDisplayText(row) }
-      )
-  },
-  {
-    title: '管理对象',
-    key: 'managed_user_names',
-    width: 220,
-    render: row =>
-      h(
-        NTag,
-        {
-          bordered: false,
-          color: (row.managed_user_ids?.length ?? 0) > 0 ? getOrgTagColor('team') : getUnassignedTagColor()
-        },
-        { default: () => getManagedUserDisplayText(row) }
       )
   },
   {
@@ -369,11 +351,6 @@ async function loadUserOptions() {
   }
 }
 
-function openCreateDepartmentModal() {
-  createDepartmentName.value = '';
-  createDepartmentVisible.value = true;
-}
-
 function openCreateTeamModal() {
   createTeamModel.name = '';
   createTeamModel.department_id = formModel.department_id ?? null;
@@ -447,44 +424,30 @@ function openAssignModal(row: Api.User.UserItem) {
   formModel.role = row.role;
   formModel.department_id = row.department_id ?? null;
   formModel.team_id = row.team_id ?? null;
-  formModel.managed_team_ids = Array.isArray(row.managed_team_ids) ? [...row.managed_team_ids] : [];
+  formModel.managed_team_ids = [];
   formModel.manager_id = row.manager_id ?? null;
   formModel.managed_user_ids = Array.isArray(row.managed_user_ids) ? [...row.managed_user_ids] : [];
   formModel.is_admin = row.is_admin;
   formModel.enabled = row.enabled !== false;
 
   modalVisible.value = true;
-  loadTeamOptions(formModel.department_id).finally(() => {
+  const deptId = row.role ? getDepartmentIdFromRole(row.role) : null;
+  loadTeamOptions(deptId).finally(() => {
     suppressOrgWatch.value = false;
   });
 }
-
-watch(
-  () => formModel.department_id,
-  val => {
-    if (suppressOrgWatch.value) return;
-
-    if (isDirectorFormRole.value) {
-      formModel.managed_team_ids = [];
-      formModel.team_id = null;
-    } else {
-      formModel.team_id = null;
-      formModel.managed_team_ids = [];
-    }
-
-    loadTeamOptions(val);
-  }
-);
 
 watch(
   () => formModel.role,
   role => {
     if (suppressOrgWatch.value) return;
 
-    if (isDirectorRole(role)) {
-      formModel.team_id = null;
-    } else {
-      formModel.managed_team_ids = [];
+    formModel.team_id = null;
+    formModel.managed_team_ids = [];
+
+    const deptId = role ? getDepartmentIdFromRole(role) : null;
+    if (deptId) {
+      loadTeamOptions(deptId);
     }
 
     const currentManager = userOptions.value.find(item => item.id === formModel.manager_id);
@@ -520,9 +483,9 @@ async function submitAssign() {
   try {
     const { error } = await updateUser(currentUser.value.id, {
       role: formModel.role ?? null,
-      department_id: formModel.department_id,
-      team_id: isDirectorFormRole.value ? null : formModel.team_id,
-      managed_team_ids: isDirectorFormRole.value ? formModel.managed_team_ids : [],
+      department_id: null,
+      team_id: formModel.team_id,
+      managed_team_ids: [],
       manager_id: formModel.manager_id,
       managed_user_ids: isManagerFormRole.value
         ? formModel.managed_user_ids.filter(userId => userId !== formModel.manager_id)
@@ -583,6 +546,7 @@ onMounted(() => {
           />
           <NSelect v-model:value="searchRole" placeholder="角色" clearable :options="roleOptions" class="w-140px" />
           <NButton type="primary" @click="onSearch">查询</NButton>
+          <NButton @click="showOrgChart">组织架构</NButton>
         </NSpace>
       </template>
 
@@ -613,41 +577,15 @@ onMounted(() => {
         </NFormItem>
 
         <NFormItem label="部门">
-          <NSelect
-            v-model:value="formModel.department_id"
-            :options="departmentOptions.map(d => ({ label: d.name, value: d.id }))"
-            placeholder="选择部门（可留空待分配）"
-            clearable
-          >
-            <template #action>
-              <div class="flex justify-end py-1">
-                <NButton text type="primary" size="small" @click.stop="openCreateDepartmentModal">+ 新增部门</NButton>
-              </div>
-            </template>
-          </NSelect>
+          <NInput :value="getDepartmentFromRole(formModel.role)" readonly placeholder="根据角色自动设置" />
+          <div class="mt-1 text-xs text-gray-400"></div>
         </NFormItem>
 
-        <NFormItem :label="isDirectorFormRole ? '管理团队' : '团队'">
+        <NFormItem label="团队">
           <NSelect
-            v-if="isDirectorFormRole"
-            v-model:value="formModel.managed_team_ids"
-            :options="teamOptions.map(t => ({ label: t.name, value: t.id }))"
-            placeholder="选择管理团队（可多选）"
-            clearable
-            multiple
-          >
-            <template #action>
-              <div class="flex justify-end py-1">
-                <NButton text type="primary" size="small" @click.stop="openCreateTeamModal">+ 新增团队</NButton>
-              </div>
-            </template>
-          </NSelect>
-
-          <NSelect
-            v-else
             v-model:value="formModel.team_id"
             :options="teamOptions.map(t => ({ label: t.name, value: t.id }))"
-            placeholder="选择团队（可留空待分配）"
+            :placeholder="isDirectorFormRole ? '选择管理的团队（可选）' : '选择团队（可留空待分配）'"
             clearable
           >
             <template #action>
@@ -656,6 +594,7 @@ onMounted(() => {
               </div>
             </template>
           </NSelect>
+          <div v-if="isDirectorFormRole" class="mt-1 text-xs text-gray-400"></div>
         </NFormItem>
 
         <NFormItem label="直属上级">
@@ -665,20 +604,6 @@ onMounted(() => {
             placeholder="选择直属上级（按角色层级过滤）"
             clearable
           />
-        </NFormItem>
-
-        <NFormItem v-if="isManagerFormRole" label="管理对象">
-          <NSelect
-            v-model:value="formModel.managed_user_ids"
-            :options="managedUserSelectOptions"
-            placeholder="选择管理对象（可多选）"
-            clearable
-            multiple
-          />
-        </NFormItem>
-
-        <NFormItem label="管理员">
-          <NSwitch v-model:value="formModel.is_admin" />
         </NFormItem>
 
         <NFormItem label="启用/停用">
@@ -729,6 +654,10 @@ onMounted(() => {
           <NButton type="primary" :loading="createTeamLoading" @click="submitCreateTeam">确定</NButton>
         </NSpace>
       </template>
+    </NModal>
+
+    <NModal v-model:show="orgChartVisible" title="组织架构图" preset="card" class="w-90vw">
+      <OrganizationChart :users="orgChartUsers" />
     </NModal>
   </div>
 </template>

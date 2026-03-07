@@ -1,7 +1,9 @@
 <script setup lang="ts">
+import { computed } from 'vue';
 import { useFullscreen } from '@vueuse/core';
 import { GLOBAL_HEADER_MENU_ID } from '@/constants/app';
 import { useAppStore } from '@/store/modules/app';
+import { useAuthStore } from '@/store/modules/auth';
 import { useThemeStore } from '@/store/modules/theme';
 import GlobalLogo from '../global-logo/index.vue';
 import GlobalBreadcrumb from '../global-breadcrumb/index.vue';
@@ -26,8 +28,14 @@ interface Props {
 defineProps<Props>();
 
 const appStore = useAppStore();
+const authStore = useAuthStore();
 const themeStore = useThemeStore();
 const { isFullscreen, toggle } = useFullscreen();
+
+const hideNotificationForQgs = computed(() => {
+  const roles = authStore.userInfo.roles || [];
+  return roles.some(role => String(role || '').startsWith('QGS'));
+});
 </script>
 
 <template>
@@ -40,7 +48,7 @@ const { isFullscreen, toggle } = useFullscreen();
     </div>
     <div class="h-full flex-y-center justify-end">
       <GlobalSearch v-if="themeStore.header.globalSearch.visible" />
-      <NotificationButton v-if="themeStore.header.notification.visible" />
+      <NotificationButton v-if="themeStore.header.notification.visible && !hideNotificationForQgs" />
       <FullScreen v-if="!appStore.isMobile" :full="isFullscreen" @click="toggle" />
       <LangSwitch
         v-if="themeStore.header.multilingual.visible"
