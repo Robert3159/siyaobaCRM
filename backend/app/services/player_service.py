@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import BusinessError
 from app.core.scope import build_scope_filter
 from app.guards import assert_can_update
-from app.models import Player, Project
-from app.schemas.user import CurrentUser
+from app.models import Form, Player, Project
+from app.schemas.user import CurrentUser, Role
 from app.services.notification_service import QGS_AUTHOR_KEY, build_notification_message, notification_hub
 from app.services.user_service import resolve_user_display_name
 
@@ -19,6 +19,20 @@ logger = logging.getLogger(__name__)
 
 def _scope_conditions(model: type, scope: dict) -> list:
     return [getattr(model, key) == value for key, value in scope.items()]
+
+
+async def _load_player_form_fields(session: AsyncSession) -> list[dict]:
+    stmt = select(Form.fields).where(
+        and_(
+            Form.code == "player_form",
+            Form.is_deleted == False,
+            Form.enabled == True,
+        )
+    )
+    fields = (await session.execute(stmt)).scalar_one_or_none()
+    if not isinstance(fields, list):
+        return []
+    return [item for item in fields if isinstance(item, dict)]
 
 
 async def submit_player(
@@ -59,7 +73,13 @@ async def submit_player(
 
     try:
         submitter = submitter_alias or f"User-{user.id}"
-        message = build_notification_message(next_content, submitter, player.id)
+        schema_fields = await _load_player_form_fields(session)
+        message = build_notification_message(
+            next_content,
+            submitter,
+            player.id,
+            schema_fields=schema_fields,
+        )
         await notification_hub.enqueue_message(message)
     except Exception:
         logger.exception("Failed to broadcast notification message")
@@ -75,12 +95,22 @@ async def assign_hgs_maintainer(
     if not alias:
         return False
 
-    scope = build_scope_filter(user, "player")
+    # Claim action is already permission-checked in websocket router.
+    # Do not apply row-level visibility here; otherwise HGS roles outside
+    # submitter scope cannot claim pending registrations.
+    if user.role not in (
+        Role.ADMIN,
+        Role.SUB_ADMIN,
+        Role.HGS_DIRECTOR,
+        Role.HGS_LEADER,
+        Role.HGS_MEMBER,
+    ):
+        return False
+
     query = select(Player).where(
         and_(
             Player.id == player_id,
             Player.is_deleted == False,
-            *_scope_conditions(Player, scope),
         )
     )
     player = (await session.execute(query)).scalars().first()

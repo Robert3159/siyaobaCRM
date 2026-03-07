@@ -43,6 +43,24 @@ def _is_director_role(role: str | None) -> bool:
     return role in _DIRECTOR_ROLE_VALUES
 
 
+def get_department_id_from_role(role: str) -> int | None:
+    """从角色推断部门ID（QGS_* → 1, HGS_* → 2）"""
+    if role.startswith("QGS_"):
+        return 1
+    elif role.startswith("HGS_"):
+        return 2
+    return None
+
+
+def get_department_code_from_role(role: str) -> str | None:
+    """从角色推断部门代码（QGS_* → QGS, HGS_* → HGS）"""
+    if role.startswith("QGS_"):
+        return "QGS"
+    elif role.startswith("HGS_"):
+        return "HGS"
+    return None
+
+
 def _can_manage_role(manager_role: str | None, target_role: str | None) -> bool:
     if not manager_role or not target_role:
         return False
@@ -225,23 +243,21 @@ async def _resolve_user_org_fields(
     session: AsyncSession,
     user: User,
 ) -> tuple[str | None, str | None, list[int], list[str]]:
-    managed_team_ids = _get_user_managed_team_ids(user)
-
+    """解析用户组织字段（部门、团队）。managed_team_ids 已废弃，始终返回空数组。"""
     dept_name_map = await _fetch_department_name_map(
         session,
         {user.department_id} if user.department_id is not None else set(),
     )
 
-    related_team_ids = set(managed_team_ids)
-    if user.team_id is not None:
-        related_team_ids.add(user.team_id)
-    team_name_map = await _fetch_team_name_map(session, related_team_ids)
+    team_name_map = await _fetch_team_name_map(
+        session,
+        {user.team_id} if user.team_id is not None else set()
+    )
 
     department_name = dept_name_map.get(user.department_id) if user.department_id is not None else None
     team_name = team_name_map.get(user.team_id) if user.team_id is not None else None
-    managed_team_names = _build_managed_team_names(managed_team_ids, team_name_map)
 
-    return department_name, team_name, managed_team_ids, managed_team_names
+    return department_name, team_name, [], []  # managed_team_ids 和 managed_team_names 废弃
 
 
 async def _resolve_user_management_fields(
@@ -286,14 +302,8 @@ async def list_users(
 
     dept_ids = {u.department_id for u in users if u.department_id is not None}
     team_ids: set[int] = {u.team_id for u in users if u.team_id is not None}
-    managed_team_ids_by_user: dict[int, list[int]] = {}
     manager_ids = {u.manager_id for u in users if u.manager_id is not None}
     user_ids = {u.id for u in users}
-
-    for u in users:
-        managed_team_ids = _get_user_managed_team_ids(u)
-        managed_team_ids_by_user[u.id] = managed_team_ids
-        team_ids.update(managed_team_ids)
 
     dept_name_map = await _fetch_department_name_map(session, dept_ids)
     team_name_map = await _fetch_team_name_map(session, team_ids)
@@ -302,7 +312,6 @@ async def list_users(
 
     items: list[dict] = []
     for u in users:
-        managed_team_ids = managed_team_ids_by_user[u.id]
         managed_users = managed_user_map.get(u.id, [])
         items.append(
             {
@@ -313,14 +322,14 @@ async def list_users(
                 "role": u.role,
                 "department_id": u.department_id,
                 "team_id": u.team_id,
-                "managed_team_ids": managed_team_ids,
+                "managed_team_ids": [],  # 废弃
                 "manager_id": u.manager_id,
                 "manager_name": manager_name_map.get(u.manager_id) if u.manager_id is not None else None,
                 "managed_user_ids": [item[0] for item in managed_users],
                 "managed_user_names": [item[1] for item in managed_users],
                 "department_name": dept_name_map.get(u.department_id) if u.department_id else None,
                 "team_name": team_name_map.get(u.team_id) if u.team_id else None,
-                "managed_team_names": _build_managed_team_names(managed_team_ids, team_name_map),
+                "managed_team_names": [],  # 废弃
                 "is_admin": u.is_admin,
                 "enabled": u.enabled,
                 "created_at": u.created_at,
@@ -417,6 +426,14 @@ async def update_user_by_admin(
     if not u:
         raise BusinessError(code="NOT_FOUND", message="用户不存在")
 
+    # 保护唯一ADMIN用户
+    if u.role == Role.ADMIN.value:
+        admin_count = (await session.execute(
+            select(func.count(User.id)).where(User.role == Role.ADMIN.value, User.is_deleted == False)
+        )).scalar()
+        if admin_count == 1:
+            raise BusinessError(code="PERMISSION_DENIED", message="系统唯一ADMIN用户不可修改")
+    
     target = SimpleNamespace(owner_id=u.id, department_id=u.department_id, team_id=u.team_id)
     assert_can_update(current_user, target, target_role=Role(u.role))
 
@@ -430,7 +447,12 @@ async def update_user_by_admin(
                 raise BusinessError(code="INVALID_ROLE", message="无效角色") from e
         next_role = role_val if role_val else Role.PENDING_MEMBER.value
 
+    # 自动从 role 推断 department_id
     next_department_id = u.department_id
+    if "role" in data:
+        auto_dept_id = get_department_id_from_role(next_role)
+        if auto_dept_id is not None:
+            next_department_id = auto_dept_id
     if "department_id" in data:
         next_department_id = data["department_id"] if data["department_id"] else None
 
@@ -438,18 +460,8 @@ async def update_user_by_admin(
     if "team_id" in data:
         next_team_id = data["team_id"] if data["team_id"] else None
 
-    next_managed_team_ids = _get_user_managed_team_ids(u)
-    if "managed_team_ids" in data:
-        next_managed_team_ids = _normalize_team_id_list(data["managed_team_ids"])
-
-    if _is_director_role(next_role):
-        if "managed_team_ids" not in data and "team_id" in data:
-            next_managed_team_ids = [next_team_id] if next_team_id else []
-        if next_managed_team_ids and next_department_id is None:
-            raise BusinessError(code="INVALID_PARAM", message="设置管理团队前请先选择部门")
-        next_team_id = next_managed_team_ids[0] if next_managed_team_ids else None
-    else:
-        next_managed_team_ids = []
+    # 废弃 managed_team_ids，强制设为空数组
+    next_managed_team_ids = []
 
     next_manager_id = u.manager_id
     if "manager_id" in data:

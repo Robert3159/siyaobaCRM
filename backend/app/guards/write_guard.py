@@ -89,13 +89,19 @@ def assert_can_delete(
     user: CurrentUser,
     resource_type: str,
     target: _OwnedTarget | None = None,
+    target_role: Role | None = None,
 ) -> None:
     """
     规则书 11.3：删除前校验。默认禁止物理删除；此处仅做「是否允许执行删除操作」判断。
 
     - resource_type: "project" | "player" | "customer" | "form" | "user"
     - target: 业务数据时传入（用于 DIRECTOR 同部门校验）；删除用户时传被删用户或 None（仅 ADMIN 可删）。
+    - target_role: 删除用户时传入，用于保护唯一ADMIN用户。
     """
+    # 保护唯一ADMIN用户
+    if resource_type == "user" and target_role == Role.ADMIN:
+        raise BusinessError(code="PERMISSION_DENIED", message="系统唯一ADMIN用户不可删除")
+    
     if user.role == Role.ADMIN:
         return
 

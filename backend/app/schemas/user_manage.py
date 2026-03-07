@@ -13,16 +13,16 @@ class UserListItem(BaseModel):
     alias: str | None
     email: str
     role: str
-    department_id: int | None
+    department_id: int | None  # 自动从 role 推断
     team_id: int | None
-    managed_team_ids: list[int] = Field(default_factory=list)
+    managed_team_ids: list[int] = Field(default_factory=list)  # 已废弃，始终为空
     manager_id: int | None = None
     manager_name: str | None = None
     managed_user_ids: list[int] = Field(default_factory=list)
     managed_user_names: list[str] = Field(default_factory=list)
     department_name: str | None = None
     team_name: str | None = None
-    managed_team_names: list[str] = Field(default_factory=list)
+    managed_team_names: list[str] = Field(default_factory=list)  # 已废弃，始终为空
     is_admin: bool
     enabled: bool
     created_at: datetime
@@ -66,9 +66,9 @@ class UserUpdateByAdmin(BaseModel):
     """Admin updates user assignment and status."""
 
     role: str | None = None
-    department_id: int | None = None
+    department_id: int | None = None  # 自动从 role 推断，前端无需传递
     team_id: int | None = None
-    managed_team_ids: list[int] | None = None
+    managed_team_ids: list[int] | None = None  # 已废弃，始终设为空数组
     manager_id: int | None = None
     managed_user_ids: list[int] | None = None
     is_admin: bool | None = None
@@ -82,16 +82,16 @@ class UserProfileResponse(BaseModel):
     email: str
     role: str
     avatar: str | None = None
-    department_id: int | None
+    department_id: int | None  # 自动从 role 推断
     team_id: int | None
-    managed_team_ids: list[int] = Field(default_factory=list)
+    managed_team_ids: list[int] = Field(default_factory=list)  # 已废弃，始终为空
     manager_id: int | None = None
     manager_name: str | None = None
     managed_user_ids: list[int] = Field(default_factory=list)
     managed_user_names: list[str] = Field(default_factory=list)
     department_name: str | None = None
     team_name: str | None = None
-    managed_team_names: list[str] = Field(default_factory=list)
+    managed_team_names: list[str] = Field(default_factory=list)  # 已废弃，始终为空
     is_admin: bool
     enabled: bool
     created_at: datetime

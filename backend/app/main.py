@@ -1,6 +1,6 @@
 import logging
 
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
@@ -43,16 +43,22 @@ def create_app() -> FastAPI:
             },
         )
 
+    from app.core.deps import get_current_user
+    
     api_router = APIRouter()
     api_router.include_router(auth.router, prefix="/auth", tags=["auth"])
-    api_router.include_router(project.router, prefix="/projects", tags=["projects"])
-    api_router.include_router(customer.router, prefix="/customers", tags=["customers"])
-    api_router.include_router(schema.router, prefix="/schemas", tags=["schemas"])
-    api_router.include_router(player.router, prefix="/players", tags=["players"])
-    api_router.include_router(role.router, prefix="/system", tags=["system-role"])
-    api_router.include_router(menu.router, prefix="/system", tags=["system-menu"])
-    api_router.include_router(user.router, prefix="/users", tags=["system-user"])
-
+    
+    # 业务路由强制登录验证
+    protected_router = APIRouter(dependencies=[Depends(get_current_user)])
+    protected_router.include_router(project.router, prefix="/projects", tags=["projects"])
+    protected_router.include_router(customer.router, prefix="/customers", tags=["customers"])
+    protected_router.include_router(schema.router, prefix="/schemas", tags=["schemas"])
+    protected_router.include_router(player.router, prefix="/players", tags=["players"])
+    protected_router.include_router(role.router, prefix="/system", tags=["system-role"])
+    protected_router.include_router(menu.router, prefix="/system", tags=["system-menu"])
+    protected_router.include_router(user.router, prefix="/users", tags=["system-user"])
+    
+    api_router.include_router(protected_router)
     app.include_router(api_router, prefix="/api")
     app.include_router(notification_ws.router, prefix="/ws")
 
