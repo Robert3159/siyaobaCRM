@@ -60,12 +60,19 @@ async def submit_player(
     if submitter_alias:
         next_content[QGS_AUTHOR_KEY] = submitter_alias
 
+    # DIRECTOR 及以上角色提交的数据只设置 department_id，不设置 team_id
+    # 这样 LEADER 就看不到 DIRECTOR 的数据
+    from app.schemas.user import Role
+    team_id = user.team_id
+    if user.role in (Role.QGS_DIRECTOR, Role.HGS_DIRECTOR, Role.SUB_ADMIN, Role.ADMIN):
+        team_id = None
+    
     player = Player(
         project_id=project_id,
         content=next_content,
         owner_id=user.id,
         department_id=user.department_id,
-        team_id=user.team_id,
+        team_id=team_id,
     )
     session.add(player)
     await session.flush()

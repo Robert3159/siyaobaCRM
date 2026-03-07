@@ -17,10 +17,8 @@ def get_data_scope_for_role(role: Role) -> DataScope:
     """Map role to default data scope."""
     if role == Role.PENDING_MEMBER:
         return DataScope.SELF
-    if role == Role.ADMIN:
+    if role in (Role.ADMIN, Role.SUB_ADMIN):
         return DataScope.ALL
-    if role == Role.SUB_ADMIN:
-        return DataScope.DEPARTMENT
     if role in (Role.QGS_DIRECTOR, Role.HGS_DIRECTOR):
         return DataScope.DEPARTMENT
     if role in (Role.QGS_LEADER, Role.HGS_LEADER):

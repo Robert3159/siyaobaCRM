@@ -7,7 +7,7 @@
 - assert_can_manage_system_resource：无归属的系统资源（如 Form）仅 ADMIN、SUB_ADMIN 可增删改。
 """
 
-from typing import Protocol
+from typing import Any, Protocol
 
 from app.core.exceptions import BusinessError
 from app.schemas.user import CurrentUser, Role
@@ -16,9 +16,9 @@ from app.schemas.user import CurrentUser, Role
 class _OwnedTarget(Protocol):
     """具备归属字段的目标（Project、Player、Customer 或 User 作为被更新目标）。"""
 
-    owner_id: int
-    department_id: int | None
-    team_id: int | None
+    owner_id: Any
+    department_id: Any
+    team_id: Any
 
 
 # 业务资源类型（用于删除权限判断）

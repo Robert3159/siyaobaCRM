@@ -19,7 +19,7 @@ const total = ref(0);
 
 const pagination = reactive({
   page: 1,
-  pageSize: 20
+  pageSize: 30
 });
 
 const searchKeyword = ref('');
@@ -87,9 +87,24 @@ const orgChartUsers = ref<Api.User.UserItem[]>([]);
 
 async function showOrgChart() {
   try {
-    const { data, error } = await fetchUserList({ page: 1, page_size: 1000 });
-    if (!error && Array.isArray(data?.items)) {
-      orgChartUsers.value = data.items;
+    const allUsers: Api.User.UserItem[] = [];
+    const pageSize = 100;
+    let hasMore = true;
+    let page = 1;
+
+    while (hasMore) {
+      // eslint-disable-next-line no-await-in-loop
+      const { data, error } = await fetchUserList({ page, page_size: pageSize });
+      if (error || !Array.isArray(data?.items)) break;
+
+      allUsers.push(...data.items);
+
+      hasMore = data.items.length === pageSize;
+      page += 1;
+    }
+
+    if (allUsers.length > 0) {
+      orgChartUsers.value = allUsers;
       orgChartVisible.value = true;
     }
   } catch {
@@ -198,12 +213,12 @@ function getManagerDisplayText(row: Api.User.UserItem) {
 
 const columns: NaiveUI.DataTableBaseColumn<Api.User.UserItem>[] = [
   { title: '用户名', key: 'user', width: 120 },
-  { title: '花名', key: 'alias', width: 100, render: row => row.alias || '-' },
   { title: '邮箱', key: 'email', width: 180 },
+  { title: '花名', key: 'alias', width: 100, render: row => row.alias || '-' },
   {
     title: '角色',
     key: 'role',
-    width: 130,
+    width: 100,
     render: row =>
       h(
         NTag,
@@ -215,23 +230,9 @@ const columns: NaiveUI.DataTableBaseColumn<Api.User.UserItem>[] = [
       )
   },
   {
-    title: '部门',
-    key: 'department_name',
-    width: 130,
-    render: row =>
-      h(
-        NTag,
-        {
-          bordered: false,
-          color: row.department_id === null ? getUnassignedTagColor() : getOrgTagColor('department')
-        },
-        { default: () => row.department_name ?? (row.department_id === null ? '未分配' : '-') }
-      )
-  },
-  {
     title: '团队',
     key: 'team_name',
-    width: 220,
+    width: 100,
     render: row =>
       h(
         NTag,
@@ -245,7 +246,7 @@ const columns: NaiveUI.DataTableBaseColumn<Api.User.UserItem>[] = [
   {
     title: '直属上级',
     key: 'manager_name',
-    width: 180,
+    width: 100,
     render: row =>
       h(
         NTag,
@@ -546,7 +547,7 @@ onMounted(() => {
           />
           <NSelect v-model:value="searchRole" placeholder="角色" clearable :options="roleOptions" class="w-140px" />
           <NButton type="primary" @click="onSearch">查询</NButton>
-          <NButton @click="showOrgChart">组织架构</NButton>
+          <NButton @click="showOrgChart">组织架构图</NButton>
         </NSpace>
       </template>
 
@@ -557,7 +558,7 @@ onMounted(() => {
           v-model:page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :item-count="total"
-          :page-sizes="[10, 20, 50]"
+          :page-sizes="[30, 50, 100]"
           show-size-picker
           @update:page="onPageChange"
           @update:page-size="onPageSizeChange"
@@ -585,7 +586,7 @@ onMounted(() => {
           <NSelect
             v-model:value="formModel.team_id"
             :options="teamOptions.map(t => ({ label: t.name, value: t.id }))"
-            :placeholder="isDirectorFormRole ? '选择管理的团队（可选）' : '选择团队（可留空待分配）'"
+            :placeholder="isDirectorFormRole ? '选择管理的团队' : '选择团队'"
             clearable
           >
             <template #action>
@@ -601,7 +602,7 @@ onMounted(() => {
           <NSelect
             v-model:value="formModel.manager_id"
             :options="managerSelectOptions"
-            placeholder="选择直属上级（按角色层级过滤）"
+            placeholder="选择直属上级"
             clearable
           />
         </NFormItem>
