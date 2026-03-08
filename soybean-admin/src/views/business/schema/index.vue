@@ -16,7 +16,7 @@ type SchemaFieldFormItem = Api.Schema.FormFieldDef & {
 const loading = ref(false);
 const tableData = ref<Api.Schema.Item[]>([]);
 const total = ref(0);
-const pagination = reactive({ page: 1, pageSize: 20 });
+const pagination = reactive({ page: 1, pageSize: 30 });
 const searchName = ref('');
 const searchEnabled = ref<string | null>(null);
 
@@ -605,7 +605,7 @@ onMounted(async () => {
           v-model:page="pagination.page"
           v-model:page-size="pagination.pageSize"
           :item-count="total"
-          :page-sizes="[10, 20, 50]"
+          :page-sizes="[30, 50, 100]"
           show-size-picker
           @update:page="loadData"
           @update:page-size="
