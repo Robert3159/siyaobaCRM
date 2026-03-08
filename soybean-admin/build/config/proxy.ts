@@ -9,7 +9,7 @@ import { createServiceConfig } from '../../src/utils/service';
  * @param env - The current env
  * @param enable - If enable http proxy
  */
-const LOCAL_BACKEND = 'http://localhost:8000/api';
+const LOCAL_BACKEND = 'http://localhost:8026/api';
 
 export function createViteProxy(env: Env.ImportMeta, enable: boolean) {
   const isEnableHttpProxy = enable && env.VITE_HTTP_PROXY === 'Y';

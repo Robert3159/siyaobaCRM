@@ -7,7 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.exceptions import BusinessError
 from app.core.scope import build_scope_filter
 from app.guards import assert_can_update
-from app.models import Form, Player, Project
+from app.models import Form, Player, Project, User
 from app.schemas.user import CurrentUser, Role
 from app.services.notification_service import QGS_AUTHOR_KEY, build_notification_message, notification_hub
 from app.services.user_service import resolve_user_display_name
@@ -19,6 +19,19 @@ logger = logging.getLogger(__name__)
 
 def _scope_conditions(model: type, scope: dict) -> list:
     return [getattr(model, key) == value for key, value in scope.items()]
+
+
+async def _get_team_member_ids(session: AsyncSession, team_id: int | None) -> list[int]:
+    """获取指定团队的所有成员ID"""
+    if team_id is None:
+        return []
+    result = await session.execute(
+        select(User.id).where(
+            User.team_id == team_id,
+            User.is_deleted == False
+        )
+    )
+    return [row[0] for row in result.all()]
 
 
 async def _load_player_form_fields(session: AsyncSession) -> list[dict]:
@@ -149,8 +162,25 @@ async def list_players(
     start_time: datetime | None = None,
     end_time: datetime | None = None,
 ) -> tuple[list[Player], int]:
-    scope = build_scope_filter(user, "player")
-    base = and_(Player.is_deleted == False, *_scope_conditions(Player, scope))
+    # 基于 owner_id 的权限过滤，数据跟随用户
+    base = Player.is_deleted == False
+    
+    if user.role in (Role.ADMIN, Role.SUB_ADMIN):
+        pass  # 查看全部
+    elif user.role in (Role.QGS_DIRECTOR, Role.HGS_DIRECTOR):
+        if user.department_id is None:
+            base = and_(base, Player.owner_id == -1)
+        else:
+            base = and_(base, Player.department_id == user.department_id)
+    elif user.role in (Role.QGS_LEADER, Role.HGS_LEADER):
+        team_member_ids = await _get_team_member_ids(session, user.team_id)
+        if team_member_ids:
+            base = and_(base, Player.owner_id.in_(team_member_ids))
+        else:
+            base = and_(base, Player.owner_id == -1)
+    else:  # MEMBER 或其他角色
+        base = and_(base, Player.owner_id == user.id)
+    
     query = select(Player).where(base)
     if project_id is not None:
         query = query.where(Player.project_id == project_id)
@@ -191,14 +221,26 @@ async def get_player(
     user: CurrentUser,
     player_id: int,
 ) -> Player | None:
-    scope = build_scope_filter(user, "player")
-    query = select(Player).where(
-        and_(
-            Player.id == player_id,
-            Player.is_deleted == False,
-            *_scope_conditions(Player, scope),
-        )
-    )
+    # 基于 owner_id 的权限过滤
+    base = and_(Player.id == player_id, Player.is_deleted == False)
+    
+    if user.role in (Role.ADMIN, Role.SUB_ADMIN):
+        pass
+    elif user.role in (Role.QGS_DIRECTOR, Role.HGS_DIRECTOR):
+        if user.department_id is None:
+            base = and_(base, Player.owner_id == -1)
+        else:
+            base = and_(base, Player.department_id == user.department_id)
+    elif user.role in (Role.QGS_LEADER, Role.HGS_LEADER):
+        team_member_ids = await _get_team_member_ids(session, user.team_id)
+        if team_member_ids:
+            base = and_(base, Player.owner_id.in_(team_member_ids))
+        else:
+            base = and_(base, Player.owner_id == -1)
+    else:
+        base = and_(base, Player.owner_id == user.id)
+    
+    query = select(Player).where(base)
     result = await session.execute(query)
     return result.scalars().first()
 
