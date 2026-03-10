@@ -44,6 +44,8 @@ __pycache__/
 *.py[cod]
 *$py.class
 venv/
+# 动态端口文件（后端启动时生成）
+backend/.port
 # 后端日志
 logs/
 *.log

@@ -8,10 +8,22 @@ import { createServiceConfig } from '../../src/utils/service';
  *
  * @param env - The current env
  * @param enable - If enable http proxy
+ * @param backendPort - Dynamic backend port (reads from backend/.port file)
  */
-const LOCAL_BACKEND = 'http://localhost:8026/api';
+export function createViteProxy(env: Env.ImportMeta, enable: boolean, backendPort?: number | null) {
+  // 如果传入了动态端口，优先使用
+  let LOCAL_BACKEND: string;
+  if (backendPort) {
+    LOCAL_BACKEND = `http://localhost:${backendPort}/api`;
+    console.log('[Proxy Config] 使用动态后端端口:', LOCAL_BACKEND);
+  } else {
+    // 从环境变量获取后端地址，使用 env 而非 import.meta.env
+    LOCAL_BACKEND = (env.VITE_SERVICE_BASE_URL as string) || 'http://localhost:3000/api';
+    console.log('[Proxy Config] VITE_SERVICE_BASE_URL:', env.VITE_SERVICE_BASE_URL);
+    console.log('[Proxy Config] LOCAL_BACKEND:', LOCAL_BACKEND);
+  }
+  console.log('[Proxy Config] VITE_HTTP_PROXY:', env.VITE_HTTP_PROXY);
 
-export function createViteProxy(env: Env.ImportMeta, enable: boolean) {
   const isEnableHttpProxy = enable && env.VITE_HTTP_PROXY === 'Y';
 
   if (!isEnableHttpProxy) return undefined;
