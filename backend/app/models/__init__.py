@@ -18,6 +18,7 @@ from app.models.base import (
     Team,
     User,
 )
+from app.models.order import Order, OrderFieldMapping, OrderImportLog, OrderSystemField
 
 __all__ = [
     "Base",
@@ -31,4 +32,8 @@ __all__ = [
     "Player",
     "RolePermission",
     "SystemRole",
+    "Order",
+    "OrderFieldMapping",
+    "OrderImportLog",
+    "OrderSystemField",
 ]

@@ -8,7 +8,7 @@ from fastapi.routing import APIRouter
 
 from app.core.database import init_db, dispose_db
 from app.core.exceptions import BusinessError, business_error_handler, validation_error_handler
-from app.routers import auth, customer, menu, player, project, role, schema, user
+from app.routers import auth, customer, menu, player, project, role, schema, user, order
 from app.routers import notification_ws
 
 logger = logging.getLogger(__name__)
@@ -54,6 +54,7 @@ def create_app() -> FastAPI:
     protected_router.include_router(customer.router, prefix="/customers", tags=["customers"])
     protected_router.include_router(schema.router, prefix="/schemas", tags=["schemas"])
     protected_router.include_router(player.router, prefix="/players", tags=["players"])
+    protected_router.include_router(order.router, prefix="/orders", tags=["orders"])
     protected_router.include_router(role.router, prefix="/system", tags=["system-role"])
     protected_router.include_router(menu.router, prefix="/system", tags=["system-menu"])
     protected_router.include_router(user.router, prefix="/users", tags=["system-user"])

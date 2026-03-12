@@ -163,22 +163,39 @@ async def list_players(
     end_time: datetime | None = None,
 ) -> tuple[list[Player], int]:
     # 基于 owner_id 的权限过滤，数据跟随用户
+    # 业务逻辑：
+    # - QGS（提交阶段）：只能看自己部门（QGS）的数据
+    # - HGS（维护阶段）：能看到所有数据（因为负责后续维护）
     base = Player.is_deleted == False
     
     if user.role in (Role.ADMIN, Role.SUB_ADMIN):
         pass  # 查看全部
-    elif user.role in (Role.QGS_DIRECTOR, Role.HGS_DIRECTOR):
+    elif user.role == Role.HGS_DIRECTOR:
+        # HGS_DIRECTOR 负责维护所有玩家，应该能看到所有数据
+        pass  # 查看全部
+    elif user.role == Role.QGS_DIRECTOR:
+        # QGS_DIRECTOR 只能看自己部门的数据
         if user.department_id is None:
             base = and_(base, Player.owner_id == -1)
         else:
             base = and_(base, Player.department_id == user.department_id)
-    elif user.role in (Role.QGS_LEADER, Role.HGS_LEADER):
+    elif user.role == Role.HGS_LEADER:
+        # HGS_LEADER 负责维护，应该能看到所有数据
+        pass  # 查看全部
+    elif user.role == Role.QGS_LEADER:
+        # QGS_LEADER 只能看自己团队的数据
         team_member_ids = await _get_team_member_ids(session, user.team_id)
         if team_member_ids:
             base = and_(base, Player.owner_id.in_(team_member_ids))
         else:
             base = and_(base, Player.owner_id == -1)
-    else:  # MEMBER 或其他角色
+    elif user.role == Role.HGS_MEMBER:
+        # HGS_MEMBER 负责维护玩家，应该能看到所有数据
+        pass  # 查看全部
+    elif user.role == Role.QGS_MEMBER:
+        # QGS_MEMBER 只能看自己提交的数据
+        base = and_(base, Player.owner_id == user.id)
+    else:
         base = and_(base, Player.owner_id == user.id)
     
     query = select(Player).where(base)
@@ -222,21 +239,38 @@ async def get_player(
     player_id: int,
 ) -> Player | None:
     # 基于 owner_id 的权限过滤
+    # 业务逻辑：
+    # - QGS（提交阶段）：只能看自己部门（QGS）的数据
+    # - HGS（维护阶段）：能看到所有数据（因为负责后续维护）
     base = and_(Player.id == player_id, Player.is_deleted == False)
     
     if user.role in (Role.ADMIN, Role.SUB_ADMIN):
         pass
-    elif user.role in (Role.QGS_DIRECTOR, Role.HGS_DIRECTOR):
+    elif user.role == Role.HGS_DIRECTOR:
+        # HGS_DIRECTOR 负责维护所有玩家，应该能看到所有数据
+        pass
+    elif user.role == Role.QGS_DIRECTOR:
+        # QGS_DIRECTOR 只能看自己部门的数据
         if user.department_id is None:
             base = and_(base, Player.owner_id == -1)
         else:
             base = and_(base, Player.department_id == user.department_id)
-    elif user.role in (Role.QGS_LEADER, Role.HGS_LEADER):
+    elif user.role == Role.HGS_LEADER:
+        # HGS_LEADER 负责维护，应该能看到所有数据
+        pass
+    elif user.role == Role.QGS_LEADER:
+        # QGS_LEADER 只能看自己团队的数据
         team_member_ids = await _get_team_member_ids(session, user.team_id)
         if team_member_ids:
             base = and_(base, Player.owner_id.in_(team_member_ids))
         else:
             base = and_(base, Player.owner_id == -1)
+    elif user.role == Role.HGS_MEMBER:
+        # HGS_MEMBER 负责维护玩家，应该能看到所有数据
+        pass
+    elif user.role == Role.QGS_MEMBER:
+        # QGS_MEMBER 只能看自己提交的数据
+        base = and_(base, Player.owner_id == user.id)
     else:
         base = and_(base, Player.owner_id == user.id)
     

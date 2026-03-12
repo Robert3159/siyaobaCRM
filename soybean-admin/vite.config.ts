@@ -37,6 +37,17 @@ export default defineConfig(configEnv => {
   // 获取后端端口
   const backendPort = getBackendPort();
 
+  // 动态设置环境变量，使用与 API 相同的端口
+  // 使用 define 在构建时替换环境变量
+  const defineVariables: Record<string, string> = {};
+  if (backendPort) {
+    const wsUrl = `ws://localhost:${backendPort}/ws/notifications`;
+    defineVariables['import.meta.env.VITE_WS_URL'] = JSON.stringify(wsUrl);
+    defineVariables['import.meta.env.VITE_SERVICE_BASE_URL'] = JSON.stringify(`http://localhost:${backendPort}/api`);
+    // eslint-disable-next-line no-console
+    console.log(`[Vite] 动态设置端口: API=http://localhost:${backendPort}/api, WS=${wsUrl}`);
+  }
+
   return {
     base: viteEnv.VITE_BASE_URL,
     resolve: {
@@ -55,7 +66,8 @@ export default defineConfig(configEnv => {
     },
     plugins: setupVitePlugins(viteEnv, buildTime),
     define: {
-      BUILD_TIME: JSON.stringify(buildTime)
+      BUILD_TIME: JSON.stringify(buildTime),
+      ...defineVariables
     },
     server: {
       host: '0.0.0.0',

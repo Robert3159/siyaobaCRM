@@ -48,6 +48,32 @@ const DEFAULT_STATIC_COLUMN_WIDTHS: Record<StaticColumnKey, number> = {
   actions: 70
 };
 
+// 前端GS选项
+const QGS_ROLE_OPTIONS = [
+  { label: 'ADMIN', value: 'ADMIN' },
+  { label: 'SUBADMIN', value: 'SUBADMIN' },
+  { label: 'QGS_DIRECTOR', value: 'QGS_DIRECTOR' },
+  { label: 'QGS_LEADER', value: 'QGS_LEADER' },
+  { label: 'QGS_MEMBER', value: 'QGS_MEMBER' }
+];
+
+// 后端GS选项
+const HGS_ROLE_OPTIONS = [
+  { label: 'ADMIN', value: 'ADMIN' },
+  { label: 'SUBADMIN', value: 'SUBADMIN' },
+  { label: 'HGS_DIRECTOR', value: 'HGS_DIRECTOR' },
+  { label: 'HGS_LEADER', value: 'HGS_LEADER' },
+  { label: 'HGS_MEMBER', value: 'HGS_MEMBER' }
+];
+
+// 上传图片相关类型
+interface UploadFieldValue {
+  name: string;
+  type: string;
+  size: number;
+  data_url: string;
+}
+
 const props = withDefaults(
   defineProps<{
     preset?: PlayerListPreset;
@@ -83,6 +109,10 @@ const editingRow = ref<Api.Player.Item | null>(null);
 const editProjectId = ref<number | null>(null);
 const editFields = ref<PlayerListField[]>([]);
 const editContentDraft = reactive<Record<string, unknown>>({});
+
+// 编辑弹窗中上传图片相关状态
+const editUploadInputRefs = ref<Record<string, HTMLInputElement | null>>({});
+const activeEditUploadImageFieldKey = ref<string | null>(null);
 const visiblePageKey = computed(() => {
   if (props.preset === 'qgs') return 'qgs/list';
   if (props.preset === 'hgs') return 'hgs/list';
@@ -1269,7 +1299,10 @@ watch(uploadPreviewModalVisible, visible => {
 });
 
 watch(editModalVisible, visible => {
-  if (!visible) clearEditState();
+  if (!visible) {
+    clearEditState();
+    activeEditUploadImageFieldKey.value = null;
+  }
 });
 
 function handleUploadFile(options: UploadCustomRequestOptions) {
@@ -1316,7 +1349,190 @@ function confirmUploadFile() {
   closeUploadModal();
 }
 
+// ========== 编辑弹窗中上传图片相关函数 ==========
+
+function setEditUploadInputRef(key: string, el: HTMLInputElement | null) {
+  editUploadInputRefs.value[key] = el;
+}
+
+function setActiveEditUploadImageField(field: PlayerListField) {
+  if (normalizeFieldType(field.type) === 'upload_image') {
+    activeEditUploadImageFieldKey.value = field.key;
+  }
+}
+
+function isEditUploadImageField(field: PlayerListField): boolean {
+  return normalizeFieldType(field.type) === 'upload_image';
+}
+
+function normalizeEditUploadValue(value: unknown): UploadFieldValue[] {
+  if (value === null || value === undefined) return [];
+
+  if (typeof value === 'string') {
+    const url = value.trim();
+    if (!url) return [];
+    return [{ name: 'uploaded-file', type: '', size: 0, data_url: url }];
+  }
+
+  if (Array.isArray(value)) {
+    return value
+      .map(item => normalizeEditUploadValue(item))
+      .flat()
+      .slice(0, UPLOAD_PREVIEW_MAX_COUNT);
+  }
+
+  if (typeof value === 'object') {
+    const data = value as Record<string, unknown>;
+    const dataUrl = data.data_url ?? data.url;
+    if (typeof dataUrl === 'string' && dataUrl.trim()) {
+      return [{
+        name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'uploaded-file',
+        type: typeof data.type === 'string' ? data.type : '',
+        size: typeof data.size === 'number' && Number.isFinite(data.size) ? data.size : 0,
+        data_url: dataUrl.trim()
+      }];
+    }
+  }
+
+  return [];
+}
+
+function getEditUploadValues(key: string): UploadFieldValue[] {
+  return normalizeEditUploadValue(editContentDraft[key]);
+}
+
+function toUploadFieldValue(file: File): Promise<UploadFieldValue | null> {
+  return new Promise(resolve => {
+    const reader = new FileReader();
+    reader.onload = e => {
+      const dataUrl = e.target?.result as string;
+      resolve({
+        name: file.name,
+        type: file.type,
+        size: file.size,
+        data_url: dataUrl
+      });
+    };
+    reader.onerror = () => resolve(null);
+    reader.readAsDataURL(file);
+  });
+}
+
+async function appendEditUploadFiles(field: PlayerListField, files: File[]) {
+  const current = getEditUploadValues(field.key);
+  const remain = UPLOAD_PREVIEW_MAX_COUNT - current.length;
+  const selectedFiles = files.slice(0, remain);
+  if (files.length > remain) {
+    window.$message?.warning(`最多可上传 ${UPLOAD_PREVIEW_MAX_COUNT} 个文件`);
+  }
+
+  const resolvedUploads = await Promise.all(selectedFiles.map(file => toUploadFieldValue(file)));
+  const nextUploads = resolvedUploads.filter((item): item is UploadFieldValue => Boolean(item));
+  const next = [...current, ...nextUploads];
+
+  editContentDraft[field.key] = next;
+}
+
+async function onEditUploadInputChange(field: PlayerListField, event: Event) {
+  const input = event.target as HTMLInputElement;
+  const files = Array.from(input.files || []);
+  if (!files.length) {
+    input.value = '';
+    return;
+  }
+
+  await appendEditUploadFiles(field, files);
+  input.value = '';
+}
+
+function removeEditUploadValue(fieldKey: string, index: number) {
+  const current = getEditUploadValues(fieldKey);
+  current.splice(index, 1);
+  editContentDraft[fieldKey] = [...current];
+}
+
+function clearEditUploadValue(fieldKey: string) {
+  editContentDraft[fieldKey] = [];
+}
+
+function pickEditUploadFile(field: PlayerListField) {
+  const input = editUploadInputRefs.value[field.key];
+  if (input) {
+    input.click();
+  }
+}
+
+function getClipboardImageFile(event: ClipboardEvent): File | null {
+  const clipboardData = event.clipboardData;
+  if (!clipboardData) return null;
+
+  const items = clipboardData.items;
+  if (!items) return null;
+
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      const file = item.getAsFile();
+      if (file instanceof File) {
+        return file;
+      }
+    }
+  }
+
+  return null;
+}
+
+async function onEditUploadFieldPaste(field: PlayerListField, event: Event) {
+  const clipboardEvent = event as ClipboardEvent;
+  setActiveEditUploadImageField(field);
+
+  if (normalizeFieldType(field.type) !== 'upload_image') return;
+  const file = getClipboardImageFile(clipboardEvent);
+  if (!file) return;
+
+  clipboardEvent.preventDefault();
+  await appendEditUploadFiles(field, [file]);
+}
+
+async function onEditWindowPaste(event: ClipboardEvent) {
+  if (!editModalVisible.value) return;
+
+  const fieldKey = activeEditUploadImageFieldKey.value;
+  if (!fieldKey) return;
+
+  const field = editFields.value.find(item => item.key === fieldKey);
+  if (!field || normalizeFieldType(field.type) !== 'upload_image') return;
+
+  const file = getClipboardImageFile(event);
+  if (!file) return;
+
+  event.preventDefault();
+  await appendEditUploadFiles(field, [file]);
+}
+
+// ========== GS字段相关函数 ==========
+
+function isQgsGsField(field: PlayerListField): boolean {
+  const key = field.key.toLowerCase();
+  return key.includes('qgs_gs') || key.includes('前端gs') || key === 'qgs_gs' || key === 'frontend_gs';
+}
+
+function isHgsGsField(field: PlayerListField): boolean {
+  const key = field.key.toLowerCase();
+  return key.includes('hgs_gs') || key.includes('后端gs') || key === 'hgs_gs' || key === 'backend_gs';
+}
+
+function getGsFieldOptions(field: PlayerListField): FieldOption[] {
+  if (isQgsGsField(field)) {
+    return QGS_ROLE_OPTIONS;
+  }
+  if (isHgsGsField(field)) {
+    return HGS_ROLE_OPTIONS;
+  }
+  return toFieldOptions(field.options);
+}
+
 onMounted(async () => {
+  window.addEventListener('paste', onEditWindowPaste);
   await Promise.all([loadProjects(), loadSchema()]);
   await loadData();
 });
@@ -1554,10 +1770,10 @@ onMounted(async () => {
               />
 
               <NSelect
-                v-else-if="isEditSelectField(field)"
+                v-else-if="isEditSelectField(field) || isQgsGsField(field) || isHgsGsField(field)"
                 :value="getEditSelectValue(field.key)"
                 :placeholder="getEditFieldPlaceholder(field)"
-                :options="toFieldOptions(field.options)"
+                :options="getGsFieldOptions(field)"
                 :multiple="isEditMultipleField(field)"
                 clearable
                 class="w-full"
@@ -1617,8 +1833,60 @@ onMounted(async () => {
                 @update:value="value => setEditSwitchValue(field.key, value)"
               />
 
+              <!-- 上传图片组件 -->
+              <div
+                v-else-if="isEditUploadImageField(field)"
+                class="upload-image-field"
+                tabindex="0"
+                @click="setActiveEditUploadImageField(field)"
+                @focusin="setActiveEditUploadImageField(field)"
+                @paste="event => onEditUploadFieldPaste(field, event)"
+                @keydown.enter.prevent="pickEditUploadFile(field)"
+                @keydown.space.prevent="pickEditUploadFile(field)"
+              >
+                <div class="upload-image-grid">
+                  <div
+                    v-for="(uploadItem, uploadIndex) in getEditUploadValues(field.key)"
+                    :key="`${field.key}-${uploadItem.name}-${uploadIndex}`"
+                    class="upload-image-item"
+                  >
+                    <img :src="uploadItem.data_url" class="upload-image-box__preview" />
+                    <button
+                      type="button"
+                      class="upload-image-item__remove"
+                      @click.stop="removeEditUploadValue(field.key, uploadIndex)"
+                    >
+                      移除
+                    </button>
+                  </div>
+                  <button
+                    v-if="getEditUploadValues(field.key).length < UPLOAD_PREVIEW_MAX_COUNT"
+                    type="button"
+                    class="upload-image-box"
+                    @click.stop="pickEditUploadFile(field)"
+                  >
+                    <div class="upload-image-box__plus">+</div>
+                    <div class="upload-image-box__text">点击上传或粘贴图片</div>
+                  </button>
+                </div>
+
+                <div v-if="getEditUploadValues(field.key).length" class="upload-meta">
+                  <span class="upload-name">已上传 {{ getEditUploadValues(field.key).length }} 张</span>
+                  <NButton text type="error" @click.stop="clearEditUploadValue(field.key)">清空</NButton>
+                </div>
+
+                <input
+                  :ref="el => setEditUploadInputRef(field.key, el as HTMLInputElement | null)"
+                  type="file"
+                  class="hidden"
+                  accept="image/*"
+                  multiple
+                  @change="event => onEditUploadInputChange(field, event)"
+                />
+              </div>
+
               <NInput
-                v-else-if="isEditTextareaField(field) || isUploadField(field)"
+                v-else-if="isEditTextareaField(field)"
                 :value="getEditStringValue(field.key)"
                 type="textarea"
                 :autosize="{ minRows: 2, maxRows: 4 }"
@@ -1769,5 +2037,95 @@ onMounted(async () => {
   max-height: 56vh;
   overflow-y: auto;
   padding-right: 4px;
+}
+
+/* 上传图片组件样式 */
+.upload-image-field {
+  width: 100%;
+}
+
+.upload-image-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.upload-image-box {
+  width: 80px;
+  height: 80px;
+  border: 1px dashed var(--n-border-color);
+  border-radius: 6px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background: transparent;
+  transition: all 0.2s;
+}
+
+.upload-image-box:hover,
+.upload-image-field:focus-within .upload-image-box {
+  border-color: var(--n-primary-color);
+  background: color-mix(in srgb, var(--n-primary-color) 5%, transparent);
+}
+
+.upload-image-box__plus {
+  font-size: 24px;
+  color: var(--n-text-color-3);
+  line-height: 1;
+}
+
+.upload-image-box__text {
+  font-size: 10px;
+  color: var(--n-text-color-3);
+  text-align: center;
+  margin-top: 4px;
+  max-width: 70px;
+}
+
+.upload-image-item {
+  position: relative;
+  width: 80px;
+  height: 80px;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.upload-image-box__preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.upload-image-item__remove {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  background: rgba(0, 0, 0, 0.6);
+  color: white;
+  font-size: 12px;
+  border: none;
+  padding: 4px;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.upload-image-item:hover .upload-image-item__remove {
+  opacity: 1;
+}
+
+.upload-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 8px;
+}
+
+.upload-name {
+  font-size: 12px;
+  color: var(--n-text-color-3);
 }
 </style>

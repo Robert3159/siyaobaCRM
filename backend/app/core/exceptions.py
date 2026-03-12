@@ -1,7 +1,7 @@
 from fastapi import Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
-from starlette.status import HTTP_400_BAD_REQUEST, HTTP_422_UNPROCESSABLE_ENTITY
+from starlette.status import HTTP_400_BAD_REQUEST, HTTP_401_UNAUTHORIZED, HTTP_422_UNPROCESSABLE_ENTITY
 
 
 class BusinessError(Exception):
@@ -18,8 +18,14 @@ class BusinessError(Exception):
 
 
 def business_error_handler(_: Request, exc: BusinessError) -> JSONResponse:
+    # 认证相关错误返回 401
+    if exc.code in ("UNAUTHENTICATED", "INVALID_TOKEN", "TOKEN_EXPIRED"):
+        status_code = HTTP_401_UNAUTHORIZED
+    else:
+        status_code = HTTP_400_BAD_REQUEST
+    
     return JSONResponse(
-        status_code=HTTP_400_BAD_REQUEST,
+        status_code=status_code,
         content={"code": exc.code, "message": exc.message, "msg": exc.message},
     )
 
