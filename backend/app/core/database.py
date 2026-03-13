@@ -77,6 +77,31 @@ async def _run_startup_migrations() -> None:
             text('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS managed_team_ids JSONB NOT NULL DEFAULT \'[]\'::jsonb')
         )
         await conn.execute(text('ALTER TABLE "User" ADD COLUMN IF NOT EXISTS manager_id INTEGER'))
+
+        # Player 表：添加 GIN 索引加速 JSONB 字段查询
+        await conn.execute(text('''
+            CREATE INDEX IF NOT EXISTS idx_player_content_gin 
+            ON "Player" USING gin (content jsonb_path_ops)
+        '''))
+        
+        # Player 表：添加 project_id 和 owner_id 索引
+        await conn.execute(text('''
+            CREATE INDEX IF NOT EXISTS idx_player_project_id ON "Player" (project_id)
+        '''))
+        await conn.execute(text('''
+            CREATE INDEX IF NOT EXISTS idx_player_owner_id ON "Player" (owner_id)
+        '''))
+
+        # Order 表：添加复合索引优化查询和排序
+        await conn.execute(text('''
+            CREATE INDEX IF NOT EXISTS idx_order_is_deleted_project 
+            ON "order_form" (is_deleted, project_id)
+        '''))
+        await conn.execute(text('''
+            CREATE INDEX IF NOT EXISTS idx_order_is_deleted_created 
+            ON "order_form" (is_deleted, created_at)
+        '''))
+
         await conn.execute(
             text(
                 'CREATE TABLE IF NOT EXISTS "SystemRole" ('

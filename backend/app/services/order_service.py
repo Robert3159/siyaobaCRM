@@ -10,6 +10,7 @@ from sqlalchemy import and_, func, select, asc, desc
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import BusinessError
+from app.core.cache import get_user_cache, get_project_cache
 from app.models import Order, OrderFieldMapping, OrderImportLog, OrderSystemField, Project, User, Player
 from app.schemas.user import CurrentUser, Role
 
@@ -116,68 +117,92 @@ async def list_orders(
         }
         items.append(item)
 
-    # 批量获取项目名称
-    project_ids = list(set([o.project_id for o in orders]))
-    if project_ids:
-        project_stmt = select(Project).where(Project.id.in_(project_ids))
-        project_result = await session.execute(project_stmt)
-        project_map = {p.id: p.name for p in project_result.scalars().all()}
+    # 优化：合并关联查询 - 一次查询获取项目、玩家、用户信息
+    # 并使用缓存减少数据库往返
+    if items:
+        # 收集所有需要查询的ID
+        project_ids = list(set([o.project_id for o in orders]))
+        player_ids = list(set([o.player_id for o in orders if o.player_id]))
+        author_ids = list(set([o.qgs__author for o in orders if o.qgs__author]))
+        maintainer_ids = list(set([o.hgs_maintainer for o in orders if o.hgs_maintainer]))
+        
+        # 获取缓存实例
+        project_cache = get_project_cache()
+        user_cache = get_user_cache()
+        
+        # 1. 批量获取项目名称（带缓存）
+        project_map = {}
+        missing_project_ids = []
+        for pid in project_ids:
+            cached = project_cache.get_sync(f"project:{pid}")
+            if cached is not None:
+                project_map[pid] = cached
+            else:
+                missing_project_ids.append(pid)
+        
+        if missing_project_ids:
+            project_stmt = select(Project.id, Project.name).where(Project.id.in_(missing_project_ids))
+            project_result = await session.execute(project_stmt)
+            for p in project_result.scalars().all():
+                project_map[p.id] = p.name
+                project_cache.set_sync(f"project:{p.id}", p.name)
+        
         for item in items:
             item["project_name"] = project_map.get(item["project_id"])
 
-    # 批量获取玩家表中的GS归属（根据player_id查询）
-    # 玩家表中玩家ID存储在content字段的fld_69f9b1e5c01d中
-    player_ids = list(set([o.player_id for o in orders if o.player_id]))
-    player_gs_map = {}
-    if player_ids:
-        # 查询玩家表，根据content->>fld_69f9b1e5c01d匹配player_id
-        player_stmt = select(Player).where(
-            and_(
-                Player.is_deleted == False,
-                Player.content[PLAYER_ID_KEY].astext.in_(player_ids)
+        # 2. 批量获取玩家GS归属
+        player_gs_map = {}
+        if player_ids:
+            player_stmt = select(Player).where(
+                and_(
+                    Player.is_deleted == False,
+                    Player.content[PLAYER_ID_KEY].astext.in_(player_ids)
+                )
             )
-        )
-        player_result = await session.execute(player_stmt)
-        for player in player_result.scalars().all():
-            player_id = player.content.get(PLAYER_ID_KEY)
-            if player_id:
-                player_gs_map[player_id] = {
-                    "qgs_author": player.content.get(QGS_AUTHOR_KEY),
-                    "hgs_maintainer": player.content.get(HGS_MAINTAINER_KEY)
-                }
+            player_result = await session.execute(player_stmt)
+            for player in player_result.scalars().all():
+                player_id = player.content.get(PLAYER_ID_KEY)
+                if player_id:
+                    player_gs_map[player_id] = {
+                        "qgs_author": player.content.get(QGS_AUTHOR_KEY),
+                        "hgs_maintainer": player.content.get(HGS_MAINTAINER_KEY)
+                    }
+
+        # 收集需要查询的用户ID（订单表中存储的是用户ID）
+        all_user_ids = set(author_ids) | set(maintainer_ids)
         
-        # 将玩家表中的GS归属设置到订单项
+        # 合并：查询用户表获取名称（玩家表存的是别名，订单表存的是用户ID，带缓存）
+        user_map = {}
+        missing_user_ids = []
+        for uid in all_user_ids:
+            cached = user_cache.get_sync(f"user:{uid}")
+            if cached is not None:
+                user_map[uid] = cached
+            else:
+                missing_user_ids.append(uid)
+        
+        if missing_user_ids:
+            user_stmt = select(User.id, User.alias, User.user).where(User.id.in_(missing_user_ids))
+            user_result = await session.execute(user_stmt)
+            for u in user_result.scalars().all():
+                user_map[u.id] = u.alias or u.user
+                user_cache.set_sync(f"user:{u.id}", u.alias or u.user)
+        
+        # 更新订单项的用户名称
         for item in items:
+            # 首先检查玩家表是否有GS归属
             if item["player_id"] in player_gs_map:
                 gs_info = player_gs_map[item["player_id"]]
                 if gs_info["qgs_author"]:
                     item["qgs__author_name"] = gs_info["qgs_author"]
                 if gs_info["hgs_maintainer"]:
                     item["hgs_maintainer_name"] = gs_info["hgs_maintainer"]
-
-    # 如果玩家表中没有找到对应的GS归属，则使用订单表中存储的用户ID查询用户表（兼容旧数据）
-    # 找出仍未设置名称的订单
-    orders_without_player_gs = [
-        item for item in items 
-        if (item["qgs__author"] and not item["qgs__author_name"]) or 
-           (item["hgs_maintainer"] and not item["hgs_maintainer_name"])
-    ]
-    
-    if orders_without_player_gs:
-        author_ids = list(set([item["qgs__author"] for item in orders_without_player_gs if item["qgs__author"]]))
-        maintainer_ids = list(set([item["hgs_maintainer"] for item in orders_without_player_gs if item["hgs_maintainer"]]))
-        all_user_ids = set(author_ids) | set(maintainer_ids)
-        
-        if all_user_ids:
-            user_stmt = select(User).where(User.id.in_(all_user_ids))
-            user_result = await session.execute(user_stmt)
-            user_map = {u.id: u.alias or u.user for u in user_result.scalars().all()}
             
-            for item in orders_without_player_gs:
-                if item["qgs__author"] and not item["qgs__author_name"]:
-                    item["qgs__author_name"] = user_map.get(item["qgs__author"])
-                if item["hgs_maintainer"] and not item["hgs_maintainer_name"]:
-                    item["hgs_maintainer_name"] = user_map.get(item["hgs_maintainer"])
+            # 如果玩家表没有，则使用订单表中存储的用户ID
+            if not item["qgs__author_name"] and item["qgs__author"]:
+                item["qgs__author_name"] = user_map.get(item["qgs__author"])
+            if not item["hgs_maintainer_name"] and item["hgs_maintainer"]:
+                item["hgs_maintainer_name"] = user_map.get(item["hgs_maintainer"])
 
     return items, total
 

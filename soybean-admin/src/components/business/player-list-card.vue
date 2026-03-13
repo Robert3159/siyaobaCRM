@@ -7,6 +7,7 @@ import { HGS_CONTENT_KEYS, type PlayerListPreset, QGS_CONTENT_KEYS } from '@/con
 import { fetchPlayerList, updatePlayer } from '@/service/api/player';
 import { fetchProjectList } from '@/service/api/project';
 import { fetchSchemaByCode } from '@/service/api/schema';
+import { fetchUserList } from '@/service/api/user';
 import { fetchColumnSettings, updateColumnSettings } from '@/service/api/column-settings';
 import { useAuthStore } from '@/store/modules/auth';
 import { useNotificationStore } from '@/store/modules/notification';
@@ -48,23 +49,15 @@ const DEFAULT_STATIC_COLUMN_WIDTHS: Record<StaticColumnKey, number> = {
   actions: 70
 };
 
-// 前端GS选项
-const QGS_ROLE_OPTIONS = [
-  { label: 'ADMIN', value: 'ADMIN' },
-  { label: 'SUBADMIN', value: 'SUBADMIN' },
-  { label: 'QGS_DIRECTOR', value: 'QGS_DIRECTOR' },
-  { label: 'QGS_LEADER', value: 'QGS_LEADER' },
-  { label: 'QGS_MEMBER', value: 'QGS_MEMBER' }
-];
+// 前端GS角色
+const QGS_ROLES = ['ADMIN', 'SUBADMIN', 'QGS_DIRECTOR', 'QGS_LEADER', 'QGS_MEMBER'];
+// 后端GS角色
+const HGS_ROLES = ['ADMIN', 'SUBADMIN', 'HGS_DIRECTOR', 'HGS_LEADER', 'HGS_MEMBER'];
 
-// 后端GS选项
-const HGS_ROLE_OPTIONS = [
-  { label: 'ADMIN', value: 'ADMIN' },
-  { label: 'SUBADMIN', value: 'SUBADMIN' },
-  { label: 'HGS_DIRECTOR', value: 'HGS_DIRECTOR' },
-  { label: 'HGS_LEADER', value: 'HGS_LEADER' },
-  { label: 'HGS_MEMBER', value: 'HGS_MEMBER' }
-];
+// 前端GS用户选项（响应式）
+const qgsUserOptions = ref<FieldOption[]>([]);
+// 后端GS用户选项（响应式）
+const hgsUserOptions = ref<FieldOption[]>([]);
 
 // 上传图片相关类型
 interface UploadFieldValue {
@@ -219,7 +212,7 @@ async function loadColumnSettingsFromDB() {
         return true;
       });
   } catch (error) {
-    // 配置不存在或加载失败，使用默认配置
+    // eslint-disable-next-line no-console
     console.warn('加载列设置失败:', error);
   }
 }
@@ -230,16 +223,19 @@ async function persistColumnWidths() {
   if (!canEditColumnSettings.value) return;
 
   // 确保数据是纯 JSON 对象（去除 Vue Proxy）
-  const payload = JSON.parse(JSON.stringify({
-    staticColumnWidths: { ...staticColumnWidths },
-    fieldColumnWidths: { ...fieldColumnWidths },
-    fieldOrder: [...savedFieldOrder.value]
-  }));
+  const payload = JSON.parse(
+    JSON.stringify({
+      staticColumnWidths: { ...staticColumnWidths },
+      fieldColumnWidths: { ...fieldColumnWidths },
+      fieldOrder: [...savedFieldOrder.value]
+    })
+  );
 
   try {
     await updateColumnSettings(props.preset, payload);
   } catch (error) {
-    console.error('保存列设置失败:', error);
+    // eslint-disable-next-line no-console
+    console.warn('保存列设置失败:', error);
   }
 }
 
@@ -627,7 +623,10 @@ function isLikelyImageField(field: PlayerListField) {
 
 function isUploadField(field: PlayerListField) {
   const normalizedType = normalizeFieldType(field.type);
-  return normalizedType === 'upload_image' || normalizedType === 'upload_attachment';
+  if (normalizedType === 'upload_image' || normalizedType === 'upload_attachment') return true;
+  // 同时检查字段key是否包含截图相关关键词
+  const key = field.key.toLowerCase();
+  return /(screenshot|screen|image|img|pic|photo|avatar|thumb|cover|截图|跟进)/i.test(key);
 }
 
 function resolveThumbnailUrls(field: PlayerListField, value: unknown) {
@@ -1382,7 +1381,11 @@ function setActiveEditUploadImageField(field: PlayerListField) {
 }
 
 function isEditUploadImageField(field: PlayerListField): boolean {
-  return normalizeFieldType(field.type) === 'upload_image';
+  // 首先检查类型是否为upload_image
+  if (normalizeFieldType(field.type) === 'upload_image') return true;
+  // 同时检查字段key是否包含截图相关关键词（用于处理上传截图和跟进截图等字段）
+  const key = field.key.toLowerCase();
+  return /(screenshot|screen|image|img|pic|photo|avatar|thumb|cover|截图|跟进)/i.test(key);
 }
 
 function normalizeEditUploadValue(value: unknown): UploadFieldValue[] {
@@ -1536,29 +1539,80 @@ async function onEditWindowPaste(event: ClipboardEvent) {
 
 function isQgsGsField(field: PlayerListField): boolean {
   const key = field.key.toLowerCase();
-  return key.includes('qgs_gs') || key.includes('前端gs') || key === 'qgs_gs' || key === 'frontend_gs';
+  // 匹配: qgs_author, 前端GS, 前端 GS, qgs_gs, QGS, frontend_gs 等
+  return (
+    key === 'qgs_author' ||
+    key.includes('前端gs') ||
+    key.includes('前端 gs') ||
+    key.includes('qgs_gs') ||
+    key === 'qgs' ||
+    key === 'frontend_gs'
+  );
 }
 
 function isHgsGsField(field: PlayerListField): boolean {
   const key = field.key.toLowerCase();
-  return key.includes('hgs_gs') || key.includes('后端gs') || key === 'hgs_gs' || key === 'backend_gs';
+  // 匹配: hgs_maintainer, 后端GS, 后端 GS, hgs_gs, HGS, backend_gs 等
+  return (
+    key === 'hgs_maintainer' ||
+    key.includes('后端gs') ||
+    key.includes('后端 gs') ||
+    key.includes('hgs_gs') ||
+    key === 'hgs' ||
+    key === 'backend_gs'
+  );
 }
 
 function getGsFieldOptions(field: PlayerListField): FieldOption[] {
   if (isQgsGsField(field)) {
-    return QGS_ROLE_OPTIONS;
+    return qgsUserOptions.value;
   }
   if (isHgsGsField(field)) {
-    return HGS_ROLE_OPTIONS;
+    return hgsUserOptions.value;
   }
   return toFieldOptions(field.options);
+}
+
+// 加载GS用户列表
+async function loadGsUsers() {
+  // 分别查询每个角色，然后合并去重（并发请求优化性能）
+  const loadUsersByRoles = async (roles: string[]): Promise<FieldOption[]> => {
+    const allUsers: Map<string, FieldOption> = new Map();
+
+    // 并发请求所有角色
+    const results = await Promise.all(roles.map(role => fetchUserList({ page: 1, page_size: 100, role })));
+
+    results.forEach(({ data, error }) => {
+      if (error) {
+        // eslint-disable-next-line no-console
+        console.error('[loadGsUsers] API error:', error);
+        return;
+      }
+      if (data?.items) {
+        data.items.forEach(user => {
+          const key = user.alias || user.user;
+          if (!allUsers.has(key)) {
+            allUsers.set(key, { label: key, value: key });
+          }
+        });
+      }
+    });
+
+    return Array.from(allUsers.values());
+  };
+
+  // 并发加载前端GS和后端GS用户列表
+  const [qgsOptions, hgsOptions] = await Promise.all([loadUsersByRoles(QGS_ROLES), loadUsersByRoles(HGS_ROLES)]);
+
+  qgsUserOptions.value = qgsOptions;
+  hgsUserOptions.value = hgsOptions;
 }
 
 onMounted(async () => {
   window.addEventListener('paste', onEditWindowPaste);
   // 加载全局列设置（从数据库）
   await loadColumnSettingsFromDB();
-  await Promise.all([loadProjects(), loadSchema()]);
+  await Promise.all([loadProjects(), loadSchema(), loadGsUsers()]);
   await loadData();
 });
 </script>

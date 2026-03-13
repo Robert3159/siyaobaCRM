@@ -44,6 +44,9 @@ class Order(Base):
         Index('idx_project_time', 'project_id', 'order_time'),
         Index('idx_gs_author', 'qgs__author'),
         Index('idx_gs_maintainer', 'hgs_maintainer'),
+        # 复合索引：优化常见查询模式
+        Index('idx_order_is_deleted_project', 'is_deleted', 'project_id'),
+        Index('idx_order_is_deleted_created', 'is_deleted', 'created_at'),
     )
 
 

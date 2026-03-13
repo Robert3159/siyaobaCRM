@@ -5,7 +5,7 @@ SQLAlchemy 声明式 Base 与表模型（与原 Prisma schema 对应）。
 from datetime import datetime
 from typing import Optional
 
-from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, ForeignKey, Integer, String, Text, UniqueConstraint, Index
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column, relationship
 
@@ -181,10 +181,10 @@ class Player(Base):
     __tablename__ = "Player"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    project_id: Mapped[int] = mapped_column(ForeignKey("Project.id"), nullable=False)
+    project_id: Mapped[int] = mapped_column(ForeignKey("Project.id"), nullable=False, index=True)
     content: Mapped[dict] = mapped_column(JSONB, nullable=False, default=dict)
 
-    owner_id: Mapped[int] = mapped_column(ForeignKey("User.id"), nullable=False)
+    owner_id: Mapped[int] = mapped_column(ForeignKey("User.id"), nullable=False, index=True)
     department_id: Mapped[Optional[int]] = mapped_column(ForeignKey("Department.id"), nullable=True)
     team_id: Mapped[Optional[int]] = mapped_column(ForeignKey("Team.id"), nullable=True)
 
@@ -193,6 +193,12 @@ class Player(Base):
 
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        # GIN 索引：加速 JSONB 字段查询
+        Index('idx_player_content_hgs_maintainer', 'content', postgresql_using='gin', 
+              postgresql_ops={'content': 'jsonb_path_ops'}),
+    )
 
 
 class SystemConfig(Base):
