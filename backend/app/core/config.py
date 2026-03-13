@@ -24,6 +24,8 @@ class Settings(BaseSettings):
 
     # Cloudflare Turnstile secret key
     turnstile_secret_key: str = ""
+    # 开发环境跳过 Turnstile 验证
+    turnstile_disabled: bool = True
 
     model_config = SettingsConfigDict(
         env_file=ENV_FILE,

@@ -8,7 +8,7 @@ from fastapi.routing import APIRouter
 
 from app.core.database import init_db, dispose_db
 from app.core.exceptions import BusinessError, business_error_handler, validation_error_handler
-from app.routers import auth, customer, menu, player, project, role, schema, user, order
+from app.routers import auth, customer, menu, player, project, role, schema, user, order, system_config
 from app.routers import notification_ws
 
 logger = logging.getLogger(__name__)
@@ -58,6 +58,8 @@ def create_app() -> FastAPI:
     protected_router.include_router(role.router, prefix="/system", tags=["system-role"])
     protected_router.include_router(menu.router, prefix="/system", tags=["system-menu"])
     protected_router.include_router(user.router, prefix="/users", tags=["system-user"])
+    # system-config 不需要前缀，直接 /api/system-config/xxx
+    protected_router.include_router(system_config.router, tags=["system-config"])
     
     api_router.include_router(protected_router)
     app.include_router(api_router, prefix="/api")

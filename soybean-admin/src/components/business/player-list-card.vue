@@ -7,6 +7,7 @@ import { HGS_CONTENT_KEYS, type PlayerListPreset, QGS_CONTENT_KEYS } from '@/con
 import { fetchPlayerList, updatePlayer } from '@/service/api/player';
 import { fetchProjectList } from '@/service/api/project';
 import { fetchSchemaByCode } from '@/service/api/schema';
+import { fetchColumnSettings, updateColumnSettings } from '@/service/api/column-settings';
 import { useAuthStore } from '@/store/modules/auth';
 import { useNotificationStore } from '@/store/modules/notification';
 import { formatUtc8DateTime } from '@/utils/datetime';
@@ -40,7 +41,6 @@ const SYSTEM_PLAYER_FIELDS: Array<Pick<Api.Schema.FormFieldDef, 'key' | 'label' 
 ];
 const MIN_COLUMN_WIDTH = 20;
 const MAX_COLUMN_WIDTH = 640;
-const COLUMN_WIDTH_STORAGE_KEY_PREFIX = 'player-list-column-widths';
 const UPLOAD_PREVIEW_MAX_COUNT = 10;
 const DEFAULT_STATIC_COLUMN_WIDTHS: Record<StaticColumnKey, number> = {
   project_id: 60,
@@ -81,9 +81,15 @@ const props = withDefaults(
   }>(),
   { preset: 'full', title: '' }
 );
-const columnWidthStorageKey = computed(() => `${COLUMN_WIDTH_STORAGE_KEY_PREFIX}:${props.preset}`);
 
 const authStore = useAuthStore();
+// 权限检查：仅 ADMIN 或 SUB_ADMIN 可见批量导入和列设置
+const canImport = computed(() => {
+  const roles = authStore.userInfo?.roles;
+  return roles?.includes('ADMIN') || roles?.includes('SUB_ADMIN');
+});
+// 只有 ADMIN/SUB_ADMIN 才能修改和保存列设置
+const canEditColumnSettings = computed(() => canImport.value);
 const notificationStore = useNotificationStore();
 const loading = ref(false);
 const tableData = ref<Api.Player.Item[]>([]);
@@ -124,10 +130,12 @@ function isStaticColumnKey(key: string): key is StaticColumnKey {
   return key === 'project_id' || key === 'created_at' || key === 'actions';
 }
 
-function applyClaimedMaintainer(payload: {
-  player_id?: number;
-  claimer?: { alias?: string };
-} | null) {
+function applyClaimedMaintainer(
+  payload: {
+    player_id?: number;
+    claimer?: { alias?: string };
+  } | null
+) {
   if (!payload?.player_id) return;
   const alias = (payload.claimer?.alias || '').trim();
   if (!alias) return;
@@ -179,30 +187,13 @@ function normalizeColumnWidth(width: number | null | undefined, fallback: number
   return Math.min(MAX_COLUMN_WIDTH, Math.max(MIN_COLUMN_WIDTH, Math.round(candidate)));
 }
 
-function persistColumnWidths() {
-  if (typeof window === 'undefined') return;
-
-  const payload = {
-    staticColumnWidths: { ...staticColumnWidths },
-    fieldColumnWidths: { ...fieldColumnWidths },
-    fieldOrder: [...savedFieldOrder.value]
-  };
-
-  window.localStorage.setItem(columnWidthStorageKey.value, JSON.stringify(payload));
-}
-
-function restoreColumnWidths() {
-  if (typeof window === 'undefined') return;
-
-  const raw = window.localStorage.getItem(columnWidthStorageKey.value);
-  if (!raw) return;
-
+// 从数据库加载全局列设置
+async function loadColumnSettingsFromDB() {
   try {
-    const parsed = JSON.parse(raw) as {
-      staticColumnWidths?: Record<string, unknown>;
-      fieldColumnWidths?: Record<string, unknown>;
-      fieldOrder?: unknown;
-    };
+    const { data } = await fetchColumnSettings(props.preset);
+    if (!data?.value) return;
+
+    const parsed = data.value;
 
     const nextStatic = parsed.staticColumnWidths || {};
     (Object.keys(DEFAULT_STATIC_COLUMN_WIDTHS) as StaticColumnKey[]).forEach(key => {
@@ -218,7 +209,7 @@ function restoreColumnWidths() {
       fieldColumnWidths[key] = normalizeColumnWidth(restored, 180);
     });
 
-    const nextOrder = Array.isArray(parsed.fieldOrder) ? parsed.fieldOrder : [];
+    const nextOrder = parsed.fieldOrder || [];
     const seen = new Set<string>();
     savedFieldOrder.value = nextOrder
       .map(item => String(item || '').trim())
@@ -227,9 +218,33 @@ function restoreColumnWidths() {
         seen.add(key);
         return true;
       });
-  } catch {
-    window.localStorage.removeItem(columnWidthStorageKey.value);
+  } catch (error) {
+    // 配置不存在或加载失败，使用默认配置
+    console.warn('加载列设置失败:', error);
   }
+}
+
+// 保存列设置到数据库（仅 ADMIN 可用）
+async function persistColumnWidths() {
+  // 只有 ADMIN 才能保存
+  if (!canEditColumnSettings.value) return;
+
+  // 确保数据是纯 JSON 对象（去除 Vue Proxy）
+  const payload = JSON.parse(JSON.stringify({
+    staticColumnWidths: { ...staticColumnWidths },
+    fieldColumnWidths: { ...fieldColumnWidths },
+    fieldOrder: [...savedFieldOrder.value]
+  }));
+
+  try {
+    await updateColumnSettings(props.preset, payload);
+  } catch (error) {
+    console.error('保存列设置失败:', error);
+  }
+}
+
+function restoreColumnWidths() {
+  // 列设置从数据库加载，由 onMounted 调用
 }
 
 function estimateFieldColumnWidth(label: string) {
@@ -479,8 +494,11 @@ watch(
   nextFields => {
     const nextMap = new Map(nextFields.map(field => [field.key, field]));
     const merged: PlayerListField[] = [];
+    // 始终优先使用 savedFieldOrder（ADMIN 的设置），其次使用当前的 draggableFields
     const preferredOrderKeys =
-      draggableFields.value.length > 0 ? draggableFields.value.map(field => field.key) : savedFieldOrder.value;
+      (savedFieldOrder.value.length > 0 && savedFieldOrder.value) ||
+      (draggableFields.value.length > 0 && draggableFields.value.map(field => field.key)) ||
+      [];
 
     preferredOrderKeys.forEach(key => {
       const nextField = nextMap.get(key);
@@ -525,6 +543,8 @@ watch(
   () => draggableFields.value.map(field => field.key),
   fieldOrder => {
     if (fieldOrder.length === 0) return;
+    // 只有 ADMIN/SUB_ADMIN 才能保存列设置
+    if (!canEditColumnSettings.value) return;
     savedFieldOrder.value = [...fieldOrder];
     persistColumnWidths();
   }
@@ -1385,12 +1405,14 @@ function normalizeEditUploadValue(value: unknown): UploadFieldValue[] {
     const data = value as Record<string, unknown>;
     const dataUrl = data.data_url ?? data.url;
     if (typeof dataUrl === 'string' && dataUrl.trim()) {
-      return [{
-        name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'uploaded-file',
-        type: typeof data.type === 'string' ? data.type : '',
-        size: typeof data.size === 'number' && Number.isFinite(data.size) ? data.size : 0,
-        data_url: dataUrl.trim()
-      }];
+      return [
+        {
+          name: typeof data.name === 'string' && data.name.trim() ? data.name.trim() : 'uploaded-file',
+          type: typeof data.type === 'string' ? data.type : '',
+          size: typeof data.size === 'number' && Number.isFinite(data.size) ? data.size : 0,
+          data_url: dataUrl.trim()
+        }
+      ];
     }
   }
 
@@ -1469,7 +1491,8 @@ function getClipboardImageFile(event: ClipboardEvent): File | null {
   const items = clipboardData.items;
   if (!items) return null;
 
-  for (const item of items) {
+  const itemsArray = Array.from(items);
+  for (const item of itemsArray) {
     if (item.type.startsWith('image/')) {
       const file = item.getAsFile();
       if (file instanceof File) {
@@ -1533,6 +1556,8 @@ function getGsFieldOptions(field: PlayerListField): FieldOption[] {
 
 onMounted(async () => {
   window.addEventListener('paste', onEditWindowPaste);
+  // 加载全局列设置（从数据库）
+  await loadColumnSettingsFromDB();
   await Promise.all([loadProjects(), loadSchema()]);
   await loadData();
 });
@@ -1553,7 +1578,7 @@ onMounted(async () => {
             end-placeholder="结束日期"
             class="w-full"
           />
-          <NInput v-model:value="searchModel.alias" placeholder="角色别名" clearable @keyup.enter="onSearch" />
+          <NInput v-model:value="searchModel.alias" placeholder="花名" clearable @keyup.enter="onSearch" />
           <NSelect
             v-model:value="searchModel.projectId"
             placeholder="项目"
@@ -1576,8 +1601,8 @@ onMounted(async () => {
     <NCard :title="cardTitle" :bordered="false">
       <template #header-extra>
         <NSpace>
-          <NButton @click="openUploadModal">批量导入</NButton>
-          <NPopover placement="bottom-end" trigger="click">
+          <NButton v-if="canImport" @click="openUploadModal">批量导入</NButton>
+          <NPopover v-if="canImport" placement="bottom-end" trigger="click">
             <template #trigger>
               <NButton>列设置</NButton>
             </template>

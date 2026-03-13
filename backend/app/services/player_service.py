@@ -34,6 +34,17 @@ async def _get_team_member_ids(session: AsyncSession, team_id: int | None) -> li
     return [row[0] for row in result.all()]
 
 
+async def _get_managed_user_ids(session: AsyncSession, manager_id: int) -> list[int]:
+    """获取归指定用户管理的下属ID（通过 manager_id 关联）"""
+    result = await session.execute(
+        select(User.id).where(
+            User.manager_id == manager_id,
+            User.is_deleted == False
+        )
+    )
+    return [row[0] for row in result.all()]
+
+
 async def _load_player_form_fields(session: AsyncSession) -> list[dict]:
     stmt = select(Form.fields).where(
         and_(
@@ -162,41 +173,96 @@ async def list_players(
     start_time: datetime | None = None,
     end_time: datetime | None = None,
 ) -> tuple[list[Player], int]:
-    # 基于 owner_id 的权限过滤，数据跟随用户
-    # 业务逻辑：
-    # - QGS（提交阶段）：只能看自己部门（QGS）的数据
-    # - HGS（维护阶段）：能看到所有数据（因为负责后续维护）
+    # 基于 owner_id 的权限过滤
+    # 权限逻辑：
+    # - QGS（提交阶段）：基于 owner_id 查询
+    # - HGS（维护阶段）：基于 content->hgs_maintainer 查询（认领的玩家）
+    # - ADMIN/SUB_ADMIN: 全部数据
     base = Player.is_deleted == False
     
+    # 获取用户别名（用于 HGS 查询）
+    user_alias = None
+    if user.role in (Role.HGS_DIRECTOR, Role.HGS_LEADER, Role.HGS_MEMBER):
+        # 获取当前用户的别名
+        result = await session.execute(
+            select(User.alias).where(User.id == user.id)
+        )
+        user_alias = result.scalar_one_or_none()
+    
     if user.role in (Role.ADMIN, Role.SUB_ADMIN):
-        pass  # 查看全部
-    elif user.role == Role.HGS_DIRECTOR:
-        # HGS_DIRECTOR 负责维护所有玩家，应该能看到所有数据
-        pass  # 查看全部
-    elif user.role == Role.QGS_DIRECTOR:
-        # QGS_DIRECTOR 只能看自己部门的数据
-        if user.department_id is None:
-            base = and_(base, Player.owner_id == -1)
-        else:
-            base = and_(base, Player.department_id == user.department_id)
-    elif user.role == Role.HGS_LEADER:
-        # HGS_LEADER 负责维护，应该能看到所有数据
-        pass  # 查看全部
-    elif user.role == Role.QGS_LEADER:
-        # QGS_LEADER 只能看自己团队的数据
-        team_member_ids = await _get_team_member_ids(session, user.team_id)
-        if team_member_ids:
-            base = and_(base, Player.owner_id.in_(team_member_ids))
-        else:
-            base = and_(base, Player.owner_id == -1)
-    elif user.role == Role.HGS_MEMBER:
-        # HGS_MEMBER 负责维护玩家，应该能看到所有数据
-        pass  # 查看全部
-    elif user.role == Role.QGS_MEMBER:
-        # QGS_MEMBER 只能看自己提交的数据
-        base = and_(base, Player.owner_id == user.id)
-    else:
-        base = and_(base, Player.owner_id == user.id)
+        pass  # 全部
+    elif user.role in (Role.QGS_DIRECTOR, Role.QGS_LEADER, Role.QGS_MEMBER):
+        # QGS: 基于 owner_id 查询
+        if user.role == Role.QGS_DIRECTOR:
+            # DIRECTOR: 自己 + 团队内所有人
+            if user.team_id is not None:
+                team_member_ids = await _get_team_member_ids(session, user.team_id)
+                if team_member_ids:
+                    all_member_ids = [user.id] + team_member_ids
+                    base = and_(base, Player.owner_id.in_(all_member_ids))
+                else:
+                    base = and_(base, Player.owner_id == user.id)
+            else:
+                base = and_(base, Player.owner_id == user.id)
+        elif user.role == Role.QGS_LEADER:
+            # LEADER: 自己 + 自己管理的下属
+            managed_user_ids = await _get_managed_user_ids(session, user.id)
+            if managed_user_ids:
+                all_member_ids = [user.id] + managed_user_ids
+                base = and_(base, Player.owner_id.in_(all_member_ids))
+            else:
+                base = and_(base, Player.owner_id == user.id)
+        else:  # QGS_MEMBER
+            base = and_(base, Player.owner_id == user.id)
+    elif user.role in (Role.HGS_DIRECTOR, Role.HGS_LEADER, Role.HGS_MEMBER):
+        # HGS: 基于 content->hgs_maintainer 查询
+        # hgs_maintainer 存储的是用户的 alias
+        if user.role == Role.HGS_DIRECTOR:
+            # DIRECTOR: 查看团队内所有被认领的数据
+            if user.team_id is not None:
+                team_member_ids = await _get_team_member_ids(session, user.team_id)
+                if team_member_ids:
+                    # 获取团队内所有成员的别名
+                    result = await session.execute(
+                        select(User.alias).where(User.id.in_(team_member_ids + [user.id]))
+                    )
+                    team_aliases = [row[0] for row in result.all() if row[0]]
+                    if team_aliases:
+                        # 查询 hgs_maintainer 在团队成员别名中的记录
+                        base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext.in_(team_aliases))
+                    else:
+                        # 没有团队成员别名，只看自己
+                        if user_alias:
+                            base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+                else:
+                    if user_alias:
+                        base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+            else:
+                if user_alias:
+                    base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+        elif user.role == Role.HGS_LEADER:
+            # LEADER: 查看自己和小组成员认领的数据
+            managed_user_ids = await _get_managed_user_ids(session, user.id)
+            if managed_user_ids:
+                # 获取下属的别名
+                result = await session.execute(
+                    select(User.alias).where(User.id.in_(managed_user_ids + [user.id]))
+                )
+                member_aliases = [row[0] for row in result.all() if row[0]]
+                if member_aliases:
+                    base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext.in_(member_aliases))
+                else:
+                    if user_alias:
+                        base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+            else:
+                if user_alias:
+                    base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+        else:  # HGS_MEMBER
+            # MEMBER: 只看自己认领的
+            if user_alias:
+                base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+    
+    query = select(Player).where(base)
     
     query = select(Player).where(base)
     if project_id is not None:
@@ -239,40 +305,82 @@ async def get_player(
     player_id: int,
 ) -> Player | None:
     # 基于 owner_id 的权限过滤
-    # 业务逻辑：
-    # - QGS（提交阶段）：只能看自己部门（QGS）的数据
-    # - HGS（维护阶段）：能看到所有数据（因为负责后续维护）
+    # 权限逻辑：
+    # - QGS（提交阶段）：基于 owner_id 查询
+    # - HGS（维护阶段）：基于 content->hgs_maintainer 查询（认领的玩家）
+    # - ADMIN/SUB_ADMIN: 全部数据
     base = and_(Player.id == player_id, Player.is_deleted == False)
+    
+    # 获取用户别名（用于 HGS 查询）
+    user_alias = None
+    if user.role in (Role.HGS_DIRECTOR, Role.HGS_LEADER, Role.HGS_MEMBER):
+        result = await session.execute(
+            select(User.alias).where(User.id == user.id)
+        )
+        user_alias = result.scalar_one_or_none()
     
     if user.role in (Role.ADMIN, Role.SUB_ADMIN):
         pass
-    elif user.role == Role.HGS_DIRECTOR:
-        # HGS_DIRECTOR 负责维护所有玩家，应该能看到所有数据
-        pass
-    elif user.role == Role.QGS_DIRECTOR:
-        # QGS_DIRECTOR 只能看自己部门的数据
-        if user.department_id is None:
-            base = and_(base, Player.owner_id == -1)
-        else:
-            base = and_(base, Player.department_id == user.department_id)
-    elif user.role == Role.HGS_LEADER:
-        # HGS_LEADER 负责维护，应该能看到所有数据
-        pass
-    elif user.role == Role.QGS_LEADER:
-        # QGS_LEADER 只能看自己团队的数据
-        team_member_ids = await _get_team_member_ids(session, user.team_id)
-        if team_member_ids:
-            base = and_(base, Player.owner_id.in_(team_member_ids))
-        else:
-            base = and_(base, Player.owner_id == -1)
-    elif user.role == Role.HGS_MEMBER:
-        # HGS_MEMBER 负责维护玩家，应该能看到所有数据
-        pass
-    elif user.role == Role.QGS_MEMBER:
-        # QGS_MEMBER 只能看自己提交的数据
-        base = and_(base, Player.owner_id == user.id)
-    else:
-        base = and_(base, Player.owner_id == user.id)
+    elif user.role in (Role.QGS_DIRECTOR, Role.QGS_LEADER, Role.QGS_MEMBER):
+        # QGS: 基于 owner_id 查询
+        if user.role == Role.QGS_DIRECTOR:
+            if user.team_id is not None:
+                team_member_ids = await _get_team_member_ids(session, user.team_id)
+                if team_member_ids:
+                    all_member_ids = [user.id] + team_member_ids
+                    base = and_(base, Player.owner_id.in_(all_member_ids))
+                else:
+                    base = and_(base, Player.owner_id == user.id)
+            else:
+                base = and_(base, Player.owner_id == user.id)
+        elif user.role == Role.QGS_LEADER:
+            managed_user_ids = await _get_managed_user_ids(session, user.id)
+            if managed_user_ids:
+                all_member_ids = [user.id] + managed_user_ids
+                base = and_(base, Player.owner_id.in_(all_member_ids))
+            else:
+                base = and_(base, Player.owner_id == user.id)
+        else:  # QGS_MEMBER
+            base = and_(base, Player.owner_id == user.id)
+    elif user.role in (Role.HGS_DIRECTOR, Role.HGS_LEADER, Role.HGS_MEMBER):
+        # HGS: 基于 content->hgs_maintainer 查询
+        if user.role == Role.HGS_DIRECTOR:
+            if user.team_id is not None:
+                team_member_ids = await _get_team_member_ids(session, user.team_id)
+                if team_member_ids:
+                    result = await session.execute(
+                        select(User.alias).where(User.id.in_(team_member_ids + [user.id]))
+                    )
+                    team_aliases = [row[0] for row in result.all() if row[0]]
+                    if team_aliases:
+                        base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext.in_(team_aliases))
+                    else:
+                        if user_alias:
+                            base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+                else:
+                    if user_alias:
+                        base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+            else:
+                if user_alias:
+                    base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+        elif user.role == Role.HGS_LEADER:
+            managed_user_ids = await _get_managed_user_ids(session, user.id)
+            if managed_user_ids:
+                result = await session.execute(
+                    select(User.alias).where(User.id.in_(managed_user_ids + [user.id]))
+                )
+                member_aliases = [row[0] for row in result.all() if row[0]]
+                if member_aliases:
+                    base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext.in_(member_aliases))
+                else:
+                    if user_alias:
+                        base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+            else:
+                if user_alias:
+                    base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
+        else:  # HGS_MEMBER
+            if user_alias:
+                base = and_(base, Player.content[HGS_MAINTAINER_KEY].astext == user_alias)
     
     query = select(Player).where(base)
     result = await session.execute(query)
