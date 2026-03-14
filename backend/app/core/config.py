@@ -12,7 +12,7 @@ class Settings(BaseSettings):
     database_url: str = ""
     jwt_secret_key: str = "CHANGE_ME_IN_PRODUCTION"
     jwt_algorithm: str = "HS256"
-    jwt_access_token_expires_minutes: int = 60 * 24
+    jwt_access_token_expires_minutes: int = 60 * 12
 
     # SMTP settings for email verification
     smtp_host: str = "smtp.qq.com"
