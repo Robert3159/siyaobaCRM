@@ -299,8 +299,7 @@ async def list_import_logs(
     base_conditions = [OrderImportLog.is_deleted == False]
 
     # 基于角色的数据权限过滤
-    user_role = str(user.role) if user.role else ""
-    if user_role not in ("ADMIN", "SUB_ADMIN"):
+    if user.role not in (Role.ADMIN, Role.SUB_ADMIN):
         base_conditions.append(OrderImportLog.import_user == user.id)
 
     if project_id is not None:
@@ -346,7 +345,7 @@ async def list_import_logs(
     # 批量获取项目名称
     project_ids = list(set([log.project_id for log in logs]))
     if project_ids:
-        project_stmt = select(Project.id, Project.name).where(Project.id.in_(project_ids))
+        project_stmt = select(Project).where(Project.id.in_(project_ids))
         project_result = await session.execute(project_stmt)
         project_map = {p.id: p.name for p in project_result.scalars().all()}
         for item in items:
@@ -355,7 +354,7 @@ async def list_import_logs(
     # 批量获取用户名称
     user_ids = list(set([log.import_user for log in logs if log.import_user]))
     if user_ids:
-        user_stmt = select(User.id, User.alias, User.user).where(User.id.in_(user_ids))
+        user_stmt = select(User).where(User.id.in_(user_ids))
         user_result = await session.execute(user_stmt)
         user_map = {u.id: u.alias or u.user for u in user_result.scalars().all()}
         for item in items:

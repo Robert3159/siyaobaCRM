@@ -311,10 +311,11 @@ async def _match_player_gs(
 
 @router.post("/import")
 async def import_orders(
+    current_user: CurrentUserDepRequired,
+    session: AsyncSession = Depends(get_async_session),
     file: UploadFile = File(...),
     project_id: int = Query(..., ge=1),
     field_mapping: str | None = Query(None),
-    session: AsyncSession = Depends(get_async_session),
 ):
     """导入订单"""
     # 读取文件
@@ -350,7 +351,7 @@ async def import_orders(
         total_rows=len(df),
         success_rows=0,
         fail_rows=0,
-        import_user=None,
+        import_user=current_user.id,
         status="processing",
     )
     session.add(import_log)

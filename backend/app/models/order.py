@@ -23,6 +23,7 @@ class Order(Base):
     player_name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     server: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
     amount: Mapped[float] = mapped_column(Numeric(18, 4), nullable=False)  # 提高精度，支持虚拟货币
+    status: Mapped[Optional[str]] = mapped_column(String(50), nullable=True, default=None)  # 订单状态: pending/processing/paid/failed/cancelled
     order_time: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True, index=True)
     qgs__author: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # 前端GS
     hgs_maintainer: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, index=True)  # 后端GS

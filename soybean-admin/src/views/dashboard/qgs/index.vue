@@ -1,11 +1,9 @@
-<script setup lang="ts"></script>
+<script setup lang="ts">
+import StatisticsPage from '../statistics/StatisticsPage.vue';
+</script>
 
 <template>
-  <div>
-    <NCard title="推广部数据看板" :bordered="false">
-      <p>数据中心 - 推广部数据看板，待接入接口与图表。</p>
-    </NCard>
-  </div>
+  <StatisticsPage preset="qgs" />
 </template>
 
 <style scoped></style>

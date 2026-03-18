@@ -14,6 +14,7 @@ declare namespace Api {
       player_name: string | null;
       server: string | null;
       amount: number;
+      status?: 'pending' | 'processing' | 'paid' | 'failed' | 'cancelled' | null; // 订单状态（可选）
       order_time: string | null;
       qgs__author: number | null;
       qgs__author_name?: string;

@@ -13,6 +13,7 @@ export {}
 declare module 'vue' {
   export interface GlobalComponents {
     AppProvider: typeof import('./../components/common/app-provider.vue')['default']
+    BarChart: typeof import('./../components/business/statistics/BarChart.vue')['default']
     BetterScroll: typeof import('./../components/custom/better-scroll.vue')['default']
     ButtonIcon: typeof import('./../components/custom/button-icon.vue')['default']
     CountTo: typeof import('./../components/custom/count-to.vue')['default']
@@ -32,6 +33,7 @@ declare module 'vue' {
     IconTooltip: typeof import('./../components/common/icon-tooltip.vue')['default']
     IconUilSearch: typeof import('~icons/uil/search')['default']
     LangSwitch: typeof import('./../components/common/lang-switch.vue')['default']
+    LineChart: typeof import('./../components/business/statistics/LineChart.vue')['default']
     LookForward: typeof import('./../components/custom/look-forward.vue')['default']
     MenuToggler: typeof import('./../components/common/menu-toggler.vue')['default']
     NAlert: typeof import('naive-ui')['NAlert']
@@ -94,6 +96,9 @@ declare module 'vue' {
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     SoybeanAvatar: typeof import('./../components/custom/soybean-avatar.vue')['default']
+    StatCard: typeof import('./../components/business/statistics/StatCard.vue')['default']
+    StatCardGroup: typeof import('./../components/business/statistics/StatCardGroup.vue')['default']
+    StatisticsTable: typeof import('./../components/business/statistics/StatisticsTable.vue')['default']
     SvgIcon: typeof import('./../components/custom/svg-icon.vue')['default']
     SystemLogo: typeof import('./../components/common/system-logo.vue')['default']
     TableColumnSetting: typeof import('./../components/advanced/table-column-setting.vue')['default']
@@ -106,6 +111,7 @@ declare module 'vue' {
 // For TSX support
 declare global {
   const AppProvider: typeof import('./../components/common/app-provider.vue')['default']
+  const BarChart: typeof import('./../components/business/statistics/BarChart.vue')['default']
   const BetterScroll: typeof import('./../components/custom/better-scroll.vue')['default']
   const ButtonIcon: typeof import('./../components/custom/button-icon.vue')['default']
   const CountTo: typeof import('./../components/custom/count-to.vue')['default']
@@ -125,6 +131,7 @@ declare global {
   const IconTooltip: typeof import('./../components/common/icon-tooltip.vue')['default']
   const IconUilSearch: typeof import('~icons/uil/search')['default']
   const LangSwitch: typeof import('./../components/common/lang-switch.vue')['default']
+  const LineChart: typeof import('./../components/business/statistics/LineChart.vue')['default']
   const LookForward: typeof import('./../components/custom/look-forward.vue')['default']
   const MenuToggler: typeof import('./../components/common/menu-toggler.vue')['default']
   const NAlert: typeof import('naive-ui')['NAlert']
@@ -187,6 +194,9 @@ declare global {
   const RouterLink: typeof import('vue-router')['RouterLink']
   const RouterView: typeof import('vue-router')['RouterView']
   const SoybeanAvatar: typeof import('./../components/custom/soybean-avatar.vue')['default']
+  const StatCard: typeof import('./../components/business/statistics/StatCard.vue')['default']
+  const StatCardGroup: typeof import('./../components/business/statistics/StatCardGroup.vue')['default']
+  const StatisticsTable: typeof import('./../components/business/statistics/StatisticsTable.vue')['default']
   const SvgIcon: typeof import('./../components/custom/svg-icon.vue')['default']
   const SystemLogo: typeof import('./../components/common/system-logo.vue')['default']
   const TableColumnSetting: typeof import('./../components/advanced/table-column-setting.vue')['default']

@@ -1,4 +1,4 @@
-﻿<script setup lang="ts">
+<script setup lang="ts">
 import { computed, h, onBeforeUnmount, onMounted, reactive, ref } from 'vue';
 import type { FormInst, FormItemRule, FormRules } from 'naive-ui';
 import { fetchProjectList } from '@/service/api/project';

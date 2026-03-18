@@ -63,6 +63,9 @@ declare namespace Api {
       id: number;
       project_id: number;
       content: Record<string, unknown>;
+      owner_id: number;
+      department_id: number | null;
+      team_id: number | null;
       created_at: string;
       updated_at: string;
     }
@@ -85,6 +88,9 @@ declare namespace Api {
       id: number;
       name: string;
       contact: string | null;
+      owner_id: number;
+      department_id: number;
+      team_id: number;
       created_at: string;
       updated_at: string;
     }

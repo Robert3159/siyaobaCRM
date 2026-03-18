@@ -42,4 +42,3 @@ def validation_error_handler(
             "details": exc.errors(),
         },
     )
-

@@ -264,7 +264,6 @@ async def list_players(
     
     query = select(Player).where(base)
     
-    query = select(Player).where(base)
     if project_id is not None:
         query = query.where(Player.project_id == project_id)
     if player_id is not None:

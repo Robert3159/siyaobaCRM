@@ -196,18 +196,14 @@ async function loadGSOptions() {
   // 获取所有用户，分别过滤前端GS和后端GS
   const { data, error } = await fetchUserList({ page: 1, page_size: 100 });
   const items = !error && Array.isArray(data?.items) ? data.items : [];
-  
+
   // 前端GS：显示所有前端相关角色，使用alias作为显示名称
   const qgsRoles = ['ADMIN', 'SUB_ADMIN', 'QGS_DIRECTOR', 'QGS_LEADER', 'QGS_MEMBER'];
-  qgsOptions.value = items
-    .filter(u => qgsRoles.includes(u.role))
-    .map(u => ({ label: u.alias || u.user, value: u.id }));
-  
+  qgsOptions.value = items.filter(u => qgsRoles.includes(u.role)).map(u => ({ label: u.alias || u.user, value: u.id }));
+
   // 后端GS：显示所有后端相关角色，使用alias作为显示名称
   const hgsRoles = ['ADMIN', 'SUB_ADMIN', 'HGS_DIRECTOR', 'HGS_LEADER', 'HGS_MEMBER'];
-  hgsOptions.value = items
-    .filter(u => hgsRoles.includes(u.role))
-    .map(u => ({ label: u.alias || u.user, value: u.id }));
+  hgsOptions.value = items.filter(u => hgsRoles.includes(u.role)).map(u => ({ label: u.alias || u.user, value: u.id }));
 }
 
 function handleSearch() {
